@@ -1,0 +1,162 @@
+name: Server deployment package
+
+on:
+  workflow_dispatch:
+    inputs:
+      architecture:
+        description: Server CPU architecture
+        type: choice
+        default: amd64
+        options: [amd64, arm64]
+  push:
+    branches: [feature/workflow-rules]
+    paths:
+      - apps/**
+      - packages/**
+      - deployments/server/**
+      - deployments/cli/community/docker-compose.yml
+      - pnpm-lock.yaml
+      - pnpm-workspace.yaml
+      - package.json
+      - turbo.json
+      - .npmrc
+      - .dockerignore
+      - .github/workflows/server-package.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: server-package-${{ github.ref }}-${{ inputs.architecture || 'amd64' }}
+  cancel-in-progress: true
+
+env:
+  BUILD_ARCH: ${{ inputs.architecture || 'amd64' }}
+
+jobs:
+  validate:
+    name: Validate deployment tools
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+      - name: Check scripts and deployment contracts
+        run: |
+          bash -n deployments/server/deploy.sh
+          shellcheck deployments/server/deploy.sh
+          python3 -m unittest discover -s deployments/server/tests -v
+
+  build:
+    name: Build ${{ matrix.name }}
+    needs: validate
+    runs-on: ${{ inputs.architecture == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: web
+            context: .
+            dockerfile: apps/web/Dockerfile.web
+          - name: space
+            context: .
+            dockerfile: apps/space/Dockerfile.space
+          - name: admin
+            context: .
+            dockerfile: apps/admin/Dockerfile.admin
+          - name: live
+            context: .
+            dockerfile: apps/live/Dockerfile.live
+          - name: backend
+            context: apps/api
+            dockerfile: apps/api/Dockerfile.api
+          - name: proxy
+            context: apps/proxy
+            dockerfile: apps/proxy/Dockerfile.ce
+    steps:
+      - uses: actions/checkout@v6
+      - uses: docker/setup-buildx-action@v4
+      - name: Compile and export image
+        uses: docker/build-push-action@v7.0.0
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          platforms: linux/${{ env.BUILD_ARCH }}
+          tags: plane-selfhost/${{ matrix.name }}:${{ github.sha }}
+          outputs: type=docker,dest=${{ runner.temp }}/${{ matrix.name }}.tar
+          cache-from: type=gha,scope=server-${{ matrix.name }}-${{ env.BUILD_ARCH }}
+          cache-to: type=gha,mode=max,scope=server-${{ matrix.name }}-${{ env.BUILD_ARCH }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.licenses=AGPL-3.0-only
+      - name: Compress Docker image
+        env:
+          IMAGE_NAME: ${{ matrix.name }}
+        run: gzip -1 "$RUNNER_TEMP/$IMAGE_NAME.tar"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: server-image-${{ matrix.name }}-${{ env.BUILD_ARCH }}
+          path: ${{ runner.temp }}/${{ matrix.name }}.tar.gz
+          compression-level: 0
+          retention-days: 1
+          if-no-files-found: error
+
+  package:
+    name: Assemble offline server package
+    needs: [validate, build]
+    runs-on: ${{ inputs.architecture == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: server-image-*-${{ env.BUILD_ARCH }}
+          path: ${{ runner.temp }}/server-images
+          merge-multiple: true
+      - name: Include database, cache, queue and object storage images
+        run: |
+          set -euo pipefail
+          images=(postgres:15.7-alpine valkey/valkey:7.2.11-alpine rabbitmq:3.13.6-management-alpine docker.io/pgsty/silo:RELEASE.2026-09-16T00-00-00Z)
+          for image in "${images[@]}"; do
+            docker pull --platform "linux/$BUILD_ARCH" "$image"
+          done
+          docker save "${images[@]}" | gzip -1 > "$RUNNER_TEMP/server-images/dependencies.tar.gz"
+      - name: Generate versioned deployment bundle
+        run: |
+          python3 deployments/server/package.py \
+            --sha "$GITHUB_SHA" --arch "$BUILD_ARCH" \
+            --repository "$GITHUB_REPOSITORY" --run-id "$GITHUB_RUN_ID" \
+            --images-dir "$RUNNER_TEMP/server-images" --output-dir "$RUNNER_TEMP/release"
+      - name: Verify package checksum
+        working-directory: ${{ runner.temp }}/release
+        run: sha256sum --check SHA256SUMS
+      - uses: actions/upload-artifact@v7
+        id: release
+        with:
+          name: plane-server-linux-${{ env.BUILD_ARCH }}-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/release/*.tar.gz
+            ${{ runner.temp }}/release/SHA256SUMS
+          compression-level: 0
+          retention-days: 7
+          if-no-files-found: error
+      - name: Show download and deployment instructions
+        env:
+          ARTIFACT_URL: ${{ steps.release.outputs.artifact-url }}
+        run: |
+          {
+            echo "## Server package ready"
+            echo "Download: $ARTIFACT_URL"
+            echo "Architecture: linux/$BUILD_ARCH"
+            echo "Source commit: $GITHUB_SHA"
+            echo 'The archive includes all application and infrastructure images; no registry login or server-side build is needed.'
+            echo 'After downloading and extracting the artifact ZIP:'
+            echo '```bash'
+            echo 'sha256sum --check SHA256SUMS'
+            echo 'tar -xzf plane-server-linux-*.tar.gz'
+            echo 'cd plane-server'
+            echo './deploy.sh init https://plane.example.com'
+            echo './deploy.sh up'
+            echo '```'
+            echo 'Use http://SERVER_IP:8080 for an initial HTTP deployment. See README.md for HTTPS, upgrades and existing data.'
+          } >> "$GITHUB_STEP_SUMMARY"

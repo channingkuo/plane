@@ -1,0 +1,83 @@
+# Built from the same source commit; never substitute upstream stable images.
+services:
+  web:
+    image: ${PLANE_WEB_IMAGE:?Missing images.env}
+    restart: unless-stopped
+  space:
+    image: ${PLANE_SPACE_IMAGE:?Missing images.env}
+    restart: unless-stopped
+  admin:
+    image: ${PLANE_ADMIN_IMAGE:?Missing images.env}
+    restart: unless-stopped
+  live:
+    image: ${PLANE_LIVE_IMAGE:?Missing images.env}
+    restart: unless-stopped
+  api:
+    image: ${PLANE_BACKEND_IMAGE:?Missing images.env}
+    restart: unless-stopped
+    environment:
+      APP_BASE_URL: ${WEB_URL}
+      GUNICORN_WORKERS: ${GUNICORN_WORKERS:-2}
+    healthcheck:
+      test:
+        [
+          CMD,
+          python,
+          -c,
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/instances/', timeout=5).read()",
+        ]
+      interval: 15s
+      timeout: 10s
+      start_period: 60s
+      retries: 20
+  worker:
+    image: ${PLANE_BACKEND_IMAGE:?Missing images.env}
+    restart: unless-stopped
+    environment:
+      APP_BASE_URL: ${WEB_URL}
+  beat-worker:
+    image: ${PLANE_BACKEND_IMAGE:?Missing images.env}
+    restart: unless-stopped
+    environment:
+      APP_BASE_URL: ${WEB_URL}
+  migrator:
+    image: ${PLANE_BACKEND_IMAGE:?Missing images.env}
+    profiles: [maintenance]
+    restart: "no"
+    deploy:
+      restart_policy:
+        condition: none
+    environment:
+      APP_BASE_URL: ${WEB_URL}
+    depends_on:
+      plane-db:
+        condition: service_healthy
+      plane-redis:
+        condition: service_healthy
+  proxy:
+    image: ${PLANE_PROXY_IMAGE:?Missing images.env}
+    restart: unless-stopped
+  plane-db:
+    restart: unless-stopped
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"']
+      interval: 5s
+      timeout: 5s
+      retries: 30
+  plane-redis:
+    restart: unless-stopped
+    healthcheck:
+      test: [CMD, valkey-cli, ping]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+  plane-mq:
+    restart: unless-stopped
+    healthcheck:
+      test: [CMD, rabbitmq-diagnostics, -q, ping]
+      interval: 10s
+      timeout: 10s
+      start_period: 20s
+      retries: 30
+  plane-minio:
+    restart: unless-stopped
