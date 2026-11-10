@@ -4,17 +4,19 @@
 
 ## 获取构建包
 
-在 GitHub 的 **Actions → Server deployment package** 打开成功的运行，下载末尾的 `plane-server-linux-amd64-<commit>` artifact。GitHub 下载的是 ZIP，其中包含部署包和外层 `SHA256SUMS`。
+在本仓库的 **Releases** 中打开对应的 `Plane server <commit> (linux/amd64)`，从 Assets 下载 `plane-server-linux-amd64-<commit>.tar.gz` 和 `SHA256SUMS`。Release Notes 包含完整部署、HTTPS、维护和升级说明。
+
+构建成功后自动发布预发布版本，标签格式为 `server-<architecture>-<commit>`，绑定本次构建提交，不覆盖其他正式版本。
 
 当前 `feature/workflow-rules` 分支代码更新会自动构建 amd64（普通 Intel/AMD 服务器）。手动运行可选择 `arm64`（ARM 服务器）；GitHub 的手动按钮需要工作流已存在于默认分支。两种架构使用对应原生 runner，不依赖模拟器。
 
-请下载最终 `plane-server-*` 产物；`server-image-*` 是中间产物。最终产物保留 7 天，镜像中间产物保留 1 天。构建不发布到上游 Docker Hub，也不需要 Docker Hub Secrets。
+Release 附件不受 Actions artifact 的 7 天保留期限制。Actions 页面仍提供 `plane-server-*` ZIP 作为 7 天临时备份，下载后需先解压 ZIP；`server-image-*` 是只保留 1 天的镜像中间产物。构建不发布到上游 Docker Hub，也不需要 Docker Hub Secrets。
 
 ## 首次部署
 
 服务器需要 Linux、Docker Engine、Docker Compose **2.24 或以上**、Bash、OpenSSL、`sha256sum`。在同一 Docker 主机上部署全部服务，建议至少 4 核 CPU、8 GB 内存及足够的镜像和数据磁盘空间。服务器架构必须与包一致；可用 `uname -m` 检查，`x86_64` 对应 amd64，`aarch64` 对应 arm64。
 
-上传并解压 GitHub 下载的 artifact ZIP，然后执行：
+将本 Release 的 `.tar.gz` 和 `SHA256SUMS` 上传到服务器的同一目录，然后执行：
 
 ```bash
 sha256sum --check SHA256SUMS

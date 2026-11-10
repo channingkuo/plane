@@ -102,7 +102,9 @@ jobs:
           if-no-files-found: error
 
   package:
-    name: Assemble offline server package
+    name: Assemble and publish offline server package
+    permissions:
+      contents: write
     needs: [validate, build]
     runs-on: ${{ inputs.architecture == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
     timeout-minutes: 30
@@ -140,17 +142,39 @@ jobs:
           compression-level: 0
           retention-days: 7
           if-no-files-found: error
+      - name: Prepare release version
+        id: version
+        run: |
+          echo "tag=server-$BUILD_ARCH-${GITHUB_SHA:0:12}" >> "$GITHUB_OUTPUT"
+          echo "name=Plane server ${GITHUB_SHA:0:12} (linux/$BUILD_ARCH)" >> "$GITHUB_OUTPUT"
+      - name: Publish offline package to GitHub Release
+        id: github-release
+        uses: softprops/action-gh-release@v2.6.1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: ${{ steps.version.outputs.name }}
+          target_commitish: ${{ github.sha }}
+          body_path: ${{ runner.temp }}/release/RELEASE_NOTES.md
+          prerelease: true
+          make_latest: false
+          fail_on_unmatched_files: true
+          files: |
+            ${{ runner.temp }}/release/*.tar.gz
+            ${{ runner.temp }}/release/SHA256SUMS
       - name: Show download and deployment instructions
         env:
           ARTIFACT_URL: ${{ steps.release.outputs.artifact-url }}
+          RELEASE_URL: ${{ steps.github-release.outputs.url }}
         run: |
           {
             echo "## Server package ready"
-            echo "Download: $ARTIFACT_URL"
+            echo "GitHub Release: $RELEASE_URL"
+            echo "Actions artifact backup: $ARTIFACT_URL"
             echo "Architecture: linux/$BUILD_ARCH"
             echo "Source commit: $GITHUB_SHA"
             echo 'The archive includes all application and infrastructure images; no registry login or server-side build is needed.'
-            echo 'After downloading and extracting the artifact ZIP:'
+            echo 'Download the .tar.gz and SHA256SUMS from the GitHub Release assets:'
             echo '```bash'
             echo 'sha256sum --check SHA256SUMS'
             echo 'tar -xzf plane-server-linux-*.tar.gz'

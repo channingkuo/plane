@@ -84,6 +84,16 @@ if 'run' in sys.argv and 'migrator' in sys.argv and os.environ.get('FAIL_MIGRATI
         for secret in ("SECRET_KEY", "LIVE_SERVER_SECRET_KEY", "POSTGRES_PASSWORD", "AWS_SECRET_ACCESS_KEY"):
             self.assertIn(secret + "=\n", (self.bundle / ".env.example").read_text())
 
+    def test_release_notes_include_provenance_and_complete_deployment_instructions(self):
+        notes = (self.output / "RELEASE_NOTES.md").read_text()
+        self.assertIn(SHA, notes)
+        self.assertIn("https://github.com/owner/plane/actions/runs/123", notes)
+        self.assertIn(f"plane-server-linux-amd64-{SHA[:12]}.tar.gz", notes)
+        for instruction in ("sha256sum --check SHA256SUMS", "./deploy.sh init", "./deploy.sh up", "## 升级和已有数据"):
+            self.assertIn(instruction, notes)
+        self.assertNotIn("artifact ZIP", notes)
+        self.assertNotIn("## 本仓库中的构建验证", notes)
+
     def test_incomplete_image_set_cannot_produce_release(self):
         (self.images / "backend.tar.gz").unlink()
         with self.assertRaisesRegex(ValueError, "backend"):

@@ -76,6 +76,19 @@ def package(images_dir, output_dir, sha, arch, repository, run_id):
         with tarfile.open(archive, "w:gz", compresslevel=1) as tar:
             tar.add(root, arcname="plane-server")
     (output_dir / "SHA256SUMS").write_text(f"{digest(archive)}  {archive.name}\n")
+    readme = (REPO_ROOT / "deployments/server/README.md").read_text()
+    deployment = readme.split("## 首次部署", 1)[1].split("## 本仓库中的构建验证", 1)[0]
+    notes = (
+        f"# Plane 服务器离线部署包（linux/{arch}）\n\n"
+        f"- 源代码提交：[`{sha}`](https://github.com/{repository}/commit/{sha})\n"
+        f"- 构建运行：https://github.com/{repository}/actions/runs/{run_id}\n"
+        f"- CPU 架构：`linux/{arch}`\n"
+        f"- 下载本 Release 的 **`{archive.name}`** 和 **`SHA256SUMS`**。\n\n"
+        "包含 Web、Space、Admin、Live、API/Worker、代理及 PostgreSQL、Valkey、RabbitMQ、Silo 镜像。"
+        "不需要服务器现场编译或登录镜像仓库。\n\n"
+        f"## 首次部署{deployment}"
+    )
+    (output_dir / "RELEASE_NOTES.md").write_text(notes)
     return archive
 
 
