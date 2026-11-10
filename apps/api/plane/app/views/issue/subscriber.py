@@ -30,7 +30,7 @@ class IssueSubscriberViewSet(BaseViewSet):
 
     def perform_create(self, serializer):
         # The URL issue must belong to the URL workspace + project (404 otherwise).
-        Issue.objects.get(
+        Issue.formal_objects.get(
             pk=self.kwargs.get("issue_id"),
             workspace__slug=self.kwargs.get("slug"),
             project_id=self.kwargs.get("project_id"),
@@ -82,7 +82,7 @@ class IssueSubscriberViewSet(BaseViewSet):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
     def subscribe(self, request, slug, project_id, issue_id):
-        Issue.objects.get(pk=issue_id, workspace__slug=slug, project_id=project_id)
+        Issue.formal_objects.get(pk=issue_id, workspace__slug=slug, project_id=project_id)
         if IssueSubscriber.objects.filter(
             issue_id=issue_id,
             subscriber=request.user,

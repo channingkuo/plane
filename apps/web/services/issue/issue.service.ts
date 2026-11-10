@@ -20,6 +20,7 @@ import type {
 } from "@plane/types";
 // services
 import { APIService } from "@/services/api.service";
+import { workflowService } from "@/services/workflow.service";
 
 export class IssueService extends APIService {
   private serviceType: TIssueServiceType;
@@ -30,6 +31,8 @@ export class IssueService extends APIService {
   }
 
   async createIssue(workspaceSlug: string, projectId: string, data: Partial<TIssue>): Promise<TIssue> {
+    const workflow = await workflowService.creation(workspaceSlug, projectId);
+    if (workflow.enabled) data = { ...data, state_id: workflow.initial_state_id };
     return this.post(`/api/workspaces/${workspaceSlug}/projects/${projectId}/${this.serviceType}/`, data)
       .then((response) => response?.data)
       .catch((error) => {
@@ -225,7 +228,14 @@ export class IssueService extends APIService {
 
   async patchIssue(workspaceSlug: string, projectId: string, issueId: string, data: Partial<TIssue>): Promise<any> {
     return this.patch(`/api/workspaces/${workspaceSlug}/projects/${projectId}/${this.serviceType}/${issueId}/`, data)
-      .then((response) => response?.data)
+      .then(async (response) => {
+        window.dispatchEvent(
+          new CustomEvent("plane:workflow-updated", { detail: { workspaceSlug, projectId, issueId } })
+        );
+        if (response.headers["x-plane-workflow"] === "enabled")
+          return this.retrieve(workspaceSlug, projectId, issueId).catch(() => response.data);
+        return response?.data;
+      })
       .catch((error) => {
         throw error?.response?.data;
       });
@@ -242,7 +252,7 @@ export class IssueService extends APIService {
   async updateIssueDates(
     workspaceSlug: string,
     projectId: string,
-    updates: { id: string; start_date?: string; target_date?: string }[]
+    updates: { id: string; start_date?: string | null; target_date?: string | null }[]
   ): Promise<void> {
     return this.post(`/api/workspaces/${workspaceSlug}/projects/${projectId}/issue-dates/`, { updates })
       .then((response) => response?.data)

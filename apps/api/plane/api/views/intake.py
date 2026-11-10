@@ -2,6 +2,10 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # See the LICENSE file for details.
 
+from plane.services.workflow.adapters import prepare_intake_input, assign_submission
+from plane.services.workflow.tasks import enqueue_after_commit
+from plane.services.workflow.adapters import submission_state
+
 # Python imports
 import json
 
@@ -177,7 +181,7 @@ class IntakeIssueListCreateAPIEndpoint(BaseAPIView):
             return Response({"error": "Invalid priority"}, status=status.HTTP_400_BAD_REQUEST)
 
         # get the triage state
-        triage_state = State.triage_objects.filter(project_id=project_id, workspace__slug=slug).first()
+        triage_state = submission_state(project_id)
 
         if not triage_state:
             triage_state = State.objects.create(
@@ -198,7 +202,9 @@ class IntakeIssueListCreateAPIEndpoint(BaseAPIView):
         raw_description_html = issue_data.get("description_html", "<p></p>")
         _, _, sanitized_description_html = validate_html_content(raw_description_html)
         safe_description_html = sanitized_description_html if sanitized_description_html is not None else "<p></p>"
+        workflow_dates, workflow_assignees = prepare_intake_input(project_id, request.data.get("issue", {}))
         issue = Issue.objects.create(
+            **workflow_dates,
             name=issue_data.get("name"),
             description_json=description_json,
             description_html=safe_description_html,
@@ -206,6 +212,8 @@ class IntakeIssueListCreateAPIEndpoint(BaseAPIView):
             project_id=project_id,
             state_id=triage_state.id,
         )
+
+        assign_submission(issue, workflow_assignees)
 
         # create an intake issue
         intake_issue = IntakeIssue.objects.create(
@@ -215,7 +223,8 @@ class IntakeIssueListCreateAPIEndpoint(BaseAPIView):
             source=SourceType.IN_APP,
         )
         # Create an Issue Activity
-        issue_activity.delay(
+        enqueue_after_commit(
+            issue_activity,
             type="issue.activity.created",
             requested_data=json.dumps(request.data, cls=DjangoJSONEncoder),
             actor_id=str(request.user.id),
@@ -416,7 +425,8 @@ class IntakeIssueDetailAPIEndpoint(BaseAPIView):
             current_instance = issue
             # Log all the updates; read-only fields are ignored on save, so they are not reported either.
             requested_data = json.dumps(writable_data(issue_serializer, issue_data), cls=DjangoJSONEncoder)
-            issue_activity.delay(
+            enqueue_after_commit(
+                issue_activity,
                 type="issue.activity.updated",
                 requested_data=requested_data,
                 actor_id=str(request.user.id),
@@ -437,7 +447,8 @@ class IntakeIssueDetailAPIEndpoint(BaseAPIView):
             intake_serializer.save()
 
             # create a activity for status change
-            issue_activity.delay(
+            enqueue_after_commit(
+                issue_activity,
                 type="intake.activity.created",
                 requested_data=json.dumps(request.data, cls=DjangoJSONEncoder),
                 actor_id=str(request.user.id),

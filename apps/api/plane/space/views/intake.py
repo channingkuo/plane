@@ -2,6 +2,10 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # See the LICENSE file for details.
 
+from plane.services.workflow.adapters import prepare_intake_input, assign_submission
+from plane.services.workflow.tasks import enqueue_after_commit
+from plane.services.workflow.adapters import submission_state
+
 # Python imports
 import json
 
@@ -135,9 +139,7 @@ class IntakeIssuePublicViewSet(BaseViewSet):
             return Response({"error": "Invalid priority"}, status=status.HTTP_400_BAD_REQUEST)
 
         # get the triage state
-        triage_state = State.triage_objects.filter(
-            project_id=project_deploy_board.project_id, workspace_id=project_deploy_board.workspace_id
-        ).first()
+        triage_state = submission_state(project_deploy_board.project_id)
 
         if not triage_state:
             triage_state = State.objects.create(
@@ -156,7 +158,11 @@ class IntakeIssuePublicViewSet(BaseViewSet):
         safe_description_html = sanitized_description_html if sanitized_description_html is not None else "<p></p>"
 
         # create an issue
+        workflow_dates, workflow_assignees = prepare_intake_input(
+            project_deploy_board.project_id, request.data.get("issue", {})
+        )
         issue = Issue.objects.create(
+            **workflow_dates,
             name=request.data.get("issue", {}).get("name"),
             description_json=request.data.get("issue", {}).get("description_json", {}),
             description_html=safe_description_html,
@@ -165,8 +171,11 @@ class IntakeIssuePublicViewSet(BaseViewSet):
             state_id=triage_state.id,
         )
 
+        assign_submission(issue, workflow_assignees)
+
         # Create an Issue Activity
-        issue_activity.delay(
+        enqueue_after_commit(
+            issue_activity,
             type="issue.activity.created",
             requested_data=json.dumps(request.data, cls=DjangoJSONEncoder),
             actor_id=str(request.user.id),
@@ -234,7 +243,8 @@ class IntakeIssuePublicViewSet(BaseViewSet):
             # Log all the updates
             requested_data = json.dumps(issue_data, cls=DjangoJSONEncoder)
             if issue is not None:
-                issue_activity.delay(
+                enqueue_after_commit(
+                    issue_activity,
                     type="issue.activity.updated",
                     requested_data=requested_data,
                     actor_id=str(request.user.id),

@@ -16,11 +16,49 @@ from django.utils import timezone
 
 # Module imports
 from plane.bgtasks.issue_activities_task import issue_activity
-from plane.db.models import IntakeIssue, Issue, Project, State
+from plane.db.models import IntakeIssue, Issue, Project, State, ProjectWorkflow
+from plane.services.workflow.execution import project_mutation, audit
+from plane.services.workflow.configuration import canonical, configuration, project_role
+from plane.services.workflow.rules import Violation
+from plane.services.workflow.tasks import enqueue_after_commit
 from plane.db.models.intake import IntakeIssueStatus
 from plane.utils.exception_logger import log_exception
 
 logger = logging.getLogger("plane.worker")
+
+
+def controlled_automation(project, issues, *, state=None, archive_at=None):
+    actor = project.created_by
+    workflow = ProjectWorkflow.objects.get(project=project, enabled=True)
+    config = canonical(configuration(workflow))
+    for candidate in issues:
+        try:
+            with project_mutation(project, actor):
+                if project_role(actor, project) not in {15, 20}:
+                    raise Violation("WORKFLOW_AUTOMATION_ACTOR_INVALID", "自动化执行人没有有效项目写入权限", status=403)
+                issue = Issue.objects.get(pk=candidate.pk)
+                if state:
+                    if state.project_id != project.pk:
+                        raise Violation("WORKFLOW_INVALID_STATE", "自动化目标状态必须属于同一项目")
+                    issue.state = state
+                    issue.save(update_fields=["state"])
+                if archive_at:
+                    issue.archived_at = archive_at
+                    issue.save(update_fields=["archived_at"])
+                enqueue_after_commit(
+                    issue_activity,
+                    type="issue.activity.updated",
+                    requested_data=json.dumps({"automation": True, "state_id": str(issue.state_id)}),
+                    actor_id=str(actor.pk),
+                    issue_id=str(issue.pk),
+                    project_id=str(project.pk),
+                    current_instance=None,
+                    epoch=int(timezone.now().timestamp()),
+                    notification=True,
+                )
+        except Violation as exc:
+            audit(project, actor, config, "automation.skipped", candidate, code=exc.code, reason=exc.message)
+            logger.info("Workflow automation skipped issue %s: %s", candidate.pk, exc.code)
 
 
 @shared_task
@@ -59,6 +97,9 @@ def archive_old_issues():
 
             # Check if Issues
             if issues:
+                if ProjectWorkflow.objects.filter(project=project, enabled=True).exists():
+                    controlled_automation(project, issues, archive_at=timezone.now().date())
+                    continue
                 # Set the archive time to current time
                 archive_at = timezone.now().date()
 
@@ -124,6 +165,10 @@ def close_old_issues():
                     close_state = State.objects.filter(group="cancelled").first()
                 else:
                     close_state = project.default_state
+
+                if ProjectWorkflow.objects.filter(project=project, enabled=True).exists():
+                    controlled_automation(project, issues, state=close_state)
+                    continue
 
                 issues_to_update = []
                 for issue in issues:

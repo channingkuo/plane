@@ -40,7 +40,7 @@ def intake_issue(db, workspace, create_user):
 
 
 @pytest.mark.contract
-@pytest.mark.django_db
+@pytest.mark.django_db(transaction=True)
 def test_intake_update_ignores_archived_at_and_records_no_archive_activity(session_client, workspace, intake_issue):
     response = session_client.patch(
         f"/api/workspaces/{workspace.slug}/projects/{intake_issue.project_id}/intake-issues/{intake_issue.id}/",

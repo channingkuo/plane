@@ -45,11 +45,11 @@ def issue_in_project(issue_id, slug, project_id, *, include_archived=False):
     ``Issue.issue_objects`` (the default) additionally excludes archived/draft/triage
     issues, which is correct for the write paths below — but a read path like
     ``list()`` must still find archived issues in the URL's own project, the same way
-    ``IssueViewSet.retrieve()`` does with ``Issue.objects``. Pass
+    ``IssueViewSet.retrieve()`` does with ``Issue.formal_objects``. Pass
     ``include_archived=True`` for that case; the project/workspace binding itself is
     unchanged either way.
     """
-    manager = Issue.objects if include_archived else Issue.issue_objects
+    manager = Issue.formal_objects if include_archived else Issue.issue_objects
     return manager.filter(pk=issue_id, workspace__slug=slug, project_id=project_id).exists()
 
 

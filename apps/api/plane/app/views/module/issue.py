@@ -263,7 +263,7 @@ class ModuleIssueViewSet(BaseViewSet):
         removed_modules = request.data.get("removed_modules", [])
         project = Project.objects.get(pk=project_id)
         # The URL issue must belong to the URL workspace + project (404 otherwise).
-        Issue.objects.get(pk=issue_id, project_id=project_id, workspace__slug=slug)
+        Issue.formal_objects.get(pk=issue_id, project_id=project_id, workspace__slug=slug)
         # Only link body modules that belong to the URL workspace + project.
         modules = [
             str(module_id)

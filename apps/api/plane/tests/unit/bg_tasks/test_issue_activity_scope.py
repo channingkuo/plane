@@ -124,6 +124,7 @@ def test_relation_activity_skips_activity_issue_outside_project(scope):
     assert not _refs(foreign, sibling).exists()
 
 
+@pytest.mark.django_db(transaction=True)
 @pytest.mark.parametrize(
     "client_fixture,view_module,url",
     [

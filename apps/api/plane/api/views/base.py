@@ -2,6 +2,8 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # See the LICENSE file for details.
 
+from plane.services.workflow.execution import mutation_dispatch
+
 # Python imports
 import zoneinfo
 import logging
@@ -108,6 +110,7 @@ class BaseAPIView(TimezoneMixin, GenericAPIView, ReadReplicaControlMixin, BasePa
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
+    @mutation_dispatch
     def dispatch(self, request, *args, **kwargs):
         try:
             response = super().dispatch(request, *args, **kwargs)
@@ -241,6 +244,7 @@ class BaseViewSet(TimezoneMixin, ReadReplicaControlMixin, ModelViewSet, BasePagi
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
+    @mutation_dispatch
     def dispatch(self, request, *args, **kwargs):
         try:
             response = super().dispatch(request, *args, **kwargs)

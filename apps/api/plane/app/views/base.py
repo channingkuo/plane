@@ -2,6 +2,8 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # See the LICENSE file for details.
 
+from plane.services.workflow.execution import mutation_dispatch
+
 # Python imports
 import traceback
 
@@ -154,9 +156,7 @@ class BaseViewSet(TimezoneMixin, ReadReplicaControlMixin, ModelViewSet, BasePagi
         # the viewset overrode it.
         if action == "create":
             perform_create_owner = self._action_owner("perform_create")
-            if perform_create_owner is not None and not perform_create_owner.__module__.startswith(
-                "rest_framework"
-            ):
+            if perform_create_owner is not None and not perform_create_owner.__module__.startswith("rest_framework"):
                 return True
 
         # DRF's partial_update delegates to self.update(), so a viewset that
@@ -238,6 +238,7 @@ class BaseViewSet(TimezoneMixin, ReadReplicaControlMixin, ModelViewSet, BasePagi
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
+    @mutation_dispatch
     def dispatch(self, request, *args, **kwargs):
         try:
             response = super().dispatch(request, *args, **kwargs)
@@ -333,6 +334,7 @@ class BaseAPIView(TimezoneMixin, ReadReplicaControlMixin, APIView, BasePaginator
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
+    @mutation_dispatch
     def dispatch(self, request, *args, **kwargs):
         try:
             response = super().dispatch(request, *args, **kwargs)

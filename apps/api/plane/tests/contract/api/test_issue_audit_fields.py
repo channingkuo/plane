@@ -137,6 +137,7 @@ class TestIssueCreateAuditFields:
 
 @pytest.mark.django_db
 class TestIssuePatchAuditFields:
+    @pytest.mark.django_db(transaction=True)
     def test_patch_keeps_created_by(self, member_api_client, workspace, project, issue, admin_user, member_user):
         url = _issue_detail_url(workspace.slug, project.id, issue.id)
         with (

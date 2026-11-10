@@ -86,7 +86,7 @@ class AnalyticsEndpoint(BaseAPIView):
         label_details = {}
         if x_axis in ["labels__id"] or segment in ["labels__id"]:
             label_details = (
-                Issue.objects.filter(
+                Issue.formal_objects.filter(
                     workspace__slug=slug,
                     **filters,
                     labels__id__isnull=False,

@@ -93,7 +93,7 @@ class WorkItemDescriptionVersionEndpoint(BaseAPIView):
     @allow_permission(allowed_roles=[ROLE.ADMIN, ROLE.MEMBER, ROLE.GUEST])
     def get(self, request, slug, project_id, work_item_id, pk=None):
         project = Project.objects.get(pk=project_id)
-        issue = Issue.objects.get(workspace__slug=slug, project_id=project_id, pk=work_item_id)
+        issue = Issue.formal_objects.get(workspace__slug=slug, project_id=project_id, pk=work_item_id)
 
         if (
             ProjectMember.objects.filter(

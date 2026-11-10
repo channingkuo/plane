@@ -63,6 +63,11 @@ export const RelationIssueProperty = observer(function RelationIssueProperty(pro
   return (
     <div className="relative flex items-center gap-2">
       <StateSelect
+        issueId={issue.id}
+        issueValues={issue}
+        onWorkflowChange={(patch) =>
+          issue.project_id && issueOperations.update(workspaceSlug, issue.project_id, issueId, patch)
+        }
         value={issue.state_id}
         projectId={issue.project_id ?? undefined}
         onChange={handleStateChange}

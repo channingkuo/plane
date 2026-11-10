@@ -260,6 +260,9 @@ export const IssueProperties = observer(function IssueProperties(props: IIssuePr
   if (isShown("state")) {
     const renderState = (extra: TPropertyEditorProps) => (
       <StateSelect
+        issueId={issue.id}
+        issueValues={issue}
+        onWorkflowChange={(patch) => updateIssue?.(issue.project_id, issue.id, patch)}
         value={issue.state_id}
         onChange={handleState}
         projectId={issue.project_id ?? undefined}

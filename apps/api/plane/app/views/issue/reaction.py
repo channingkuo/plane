@@ -56,7 +56,7 @@ class IssueReactionViewSet(BaseViewSet):
     @allow_permission([ROLE.ADMIN, ROLE.MEMBER, ROLE.GUEST])
     def create(self, request, slug, project_id, issue_id):
         # The URL issue must belong to the URL workspace + project (404 otherwise).
-        Issue.objects.get(pk=issue_id, workspace__slug=slug, project_id=project_id)
+        Issue.formal_objects.get(pk=issue_id, workspace__slug=slug, project_id=project_id)
         serializer = IssueReactionSerializer(data=request.data)
         if serializer.is_valid():
             serializer.save(issue_id=issue_id, project_id=project_id, actor=request.user)

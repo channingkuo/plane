@@ -785,7 +785,7 @@ class ProjectSummaryAPIEndpoint(BaseAPIView):
                 .values("count")
             ),
             "issues": lambda: (
-                Issue.objects.filter(project_id=OuterRef("pk"))
+                Issue.formal_objects.filter(project_id=OuterRef("pk"))
                 .exclude(state__group=StateGroup.TRIAGE.value)
                 .values("project_id")
                 .annotate(count=Count("*"))

@@ -727,7 +727,7 @@ class ModuleIssueListCreateAPIEndpoint(BaseAPIView):
             return Response({"error": "Issues are required"}, status=status.HTTP_400_BAD_REQUEST)
         module = Module.objects.get(workspace__slug=slug, project_id=project_id, pk=module_id)
 
-        issues = Issue.objects.filter(workspace__slug=slug, project_id=project_id, pk__in=issues).values_list(
+        issues = Issue.formal_objects.filter(workspace__slug=slug, project_id=project_id, pk__in=issues).values_list(
             "id", flat=True
         )
 
@@ -860,7 +860,7 @@ class ModuleIssueDetailAPIEndpoint(BaseAPIView):
         Retrieve all work items assigned to a module with detailed information.
         Returns paginated results including assignees, labels, and attachments.
         """
-        issue = Issue.objects.get(workspace__slug=slug, project_id=project_id, pk=issue_id)
+        issue = Issue.formal_objects.get(workspace__slug=slug, project_id=project_id, pk=issue_id)
         if guest_cannot_view_issue(request.user.id, issue, slug):
             raise Issue.DoesNotExist()
 

@@ -2,6 +2,8 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # See the LICENSE file for details.
 
+from plane.services.workflow.tasks import enqueue_after_commit
+
 # Python imports
 import json
 import uuid
@@ -407,7 +409,7 @@ class IssueListCreateAPIEndpoint(BaseAPIView):
         external_source = request.GET.get("external_source")
 
         if external_id and external_source:
-            issue = Issue.objects.get(
+            issue = Issue.formal_objects.get(
                 external_id=external_id,
                 external_source=external_source,
                 workspace__slug=slug,
@@ -552,14 +554,14 @@ class IssueListCreateAPIEndpoint(BaseAPIView):
             if (
                 request.data.get("external_id")
                 and request.data.get("external_source")
-                and Issue.objects.filter(
+                and Issue.formal_objects.filter(
                     project_id=project_id,
                     workspace__slug=slug,
                     external_source=request.data.get("external_source"),
                     external_id=request.data.get("external_id"),
                 ).exists()
             ):
-                issue = Issue.objects.filter(
+                issue = Issue.formal_objects.filter(
                     workspace__slug=slug,
                     project_id=project_id,
                     external_id=request.data.get("external_id"),
@@ -576,7 +578,8 @@ class IssueListCreateAPIEndpoint(BaseAPIView):
             serializer.save()
 
             # Track the issue
-            issue_activity.delay(
+            enqueue_after_commit(
+                issue_activity,
                 type="issue.activity.created",
                 requested_data=json.dumps(self.request.data, cls=DjangoJSONEncoder),
                 actor_id=str(request.user.id),
@@ -589,7 +592,8 @@ class IssueListCreateAPIEndpoint(BaseAPIView):
             )
 
             # Send the model activity
-            model_activity.delay(
+            enqueue_after_commit(
+                model_activity,
                 model_name="issue",
                 model_id=str(serializer.data["id"]),
                 requested_data=request.data,
@@ -712,7 +716,7 @@ class IssueDetailAPIEndpoint(BaseAPIView):
         # external_source
         if external_id and external_source:
             try:
-                issue = Issue.objects.get(
+                issue = Issue.formal_objects.get(
                     project_id=project_id,
                     workspace__slug=slug,
                     external_id=external_id,
@@ -739,7 +743,8 @@ class IssueDetailAPIEndpoint(BaseAPIView):
                     serializer.save()
                     # Read-only fields are ignored on save, so they are not reported as changes either.
                     accepted_data = writable_data(serializer, request.data)
-                    issue_activity.delay(
+                    enqueue_after_commit(
+                        issue_activity,
                         type="issue.activity.updated",
                         requested_data=json.dumps(accepted_data, cls=DjangoJSONEncoder),
                         actor_id=str(request.user.id),
@@ -751,7 +756,8 @@ class IssueDetailAPIEndpoint(BaseAPIView):
                         origin=base_host(request=request, is_app=True),
                     )
                     # Send the model activity for webhook dispatch
-                    model_activity.delay(
+                    enqueue_after_commit(
+                        model_activity,
                         model_name="issue",
                         model_id=str(issue.id),
                         requested_data=accepted_data,
@@ -786,7 +792,8 @@ class IssueDetailAPIEndpoint(BaseAPIView):
                 if serializer.is_valid():
                     serializer.save()
 
-                    issue_activity.delay(
+                    enqueue_after_commit(
+                        issue_activity,
                         type="issue.activity.created",
                         requested_data=json.dumps(self.request.data, cls=DjangoJSONEncoder),
                         actor_id=str(request.user.id),
@@ -798,7 +805,8 @@ class IssueDetailAPIEndpoint(BaseAPIView):
                         origin=base_host(request=request, is_app=True),
                     )
                     # Send the model activity for webhook dispatch
-                    model_activity.delay(
+                    enqueue_after_commit(
+                        model_activity,
                         model_name="issue",
                         model_id=str(serializer.data["id"]),
                         requested_data=request.data,
@@ -843,7 +851,7 @@ class IssueDetailAPIEndpoint(BaseAPIView):
         Partially update an existing work item with the provided fields.
         Supports external ID validation to prevent conflicts.
         """
-        issue = Issue.objects.get(workspace__slug=slug, project_id=project_id, pk=pk)
+        issue = Issue.formal_objects.get(workspace__slug=slug, project_id=project_id, pk=pk)
         project = Project.objects.get(pk=project_id)
         current_instance = json.dumps(IssueSerializer(issue).data, cls=DjangoJSONEncoder)
         serializer = IssueSerializer(
@@ -856,7 +864,7 @@ class IssueDetailAPIEndpoint(BaseAPIView):
             if (
                 request.data.get("external_id")
                 and (issue.external_id != str(request.data.get("external_id")))
-                and Issue.objects.filter(
+                and Issue.formal_objects.filter(
                     project_id=project_id,
                     workspace__slug=slug,
                     external_source=request.data.get("external_source", issue.external_source),
@@ -874,7 +882,8 @@ class IssueDetailAPIEndpoint(BaseAPIView):
             serializer.save()
             # Read-only fields are ignored on save, so they are not reported as changes either.
             accepted_data = writable_data(serializer, request.data)
-            issue_activity.delay(
+            enqueue_after_commit(
+                issue_activity,
                 type="issue.activity.updated",
                 requested_data=json.dumps(accepted_data, cls=DjangoJSONEncoder),
                 actor_id=str(request.user.id),
@@ -886,7 +895,8 @@ class IssueDetailAPIEndpoint(BaseAPIView):
                 origin=base_host(request=request, is_app=True),
             )
             # Send the model activity for webhook dispatch
-            model_activity.delay(
+            enqueue_after_commit(
+                model_activity,
                 model_name="issue",
                 model_id=str(pk),
                 requested_data=accepted_data,
@@ -917,7 +927,7 @@ class IssueDetailAPIEndpoint(BaseAPIView):
         Permanently delete an existing work item from the project.
         Only admins or the item creator can perform this action.
         """
-        issue = Issue.objects.get(workspace__slug=slug, project_id=project_id, pk=pk)
+        issue = Issue.formal_objects.get(workspace__slug=slug, project_id=project_id, pk=pk)
         if issue.created_by_id != request.user.id and (
             not ProjectMember.objects.filter(
                 workspace__slug=slug,
@@ -933,7 +943,8 @@ class IssueDetailAPIEndpoint(BaseAPIView):
             )
         current_instance = json.dumps(IssueSerializer(issue).data, cls=DjangoJSONEncoder)
         issue.delete()
-        issue_activity.delay(
+        enqueue_after_commit(
+            issue_activity,
             type="issue.activity.deleted",
             requested_data=json.dumps({"issue_id": str(pk)}),
             actor_id=str(request.user.id),
@@ -1196,7 +1207,7 @@ class IssueLinkListCreateAPIEndpoint(BaseAPIView):
 
     def get_queryset(self):
         slug = self.kwargs.get("slug")
-        issue = Issue.objects.get(
+        issue = Issue.formal_objects.get(
             workspace__slug=slug,
             project_id=self.kwargs.get("project_id"),
             pk=self.kwargs.get("issue_id"),
@@ -1277,13 +1288,14 @@ class IssueLinkListCreateAPIEndpoint(BaseAPIView):
         Add a new external link to a work item with URL, title, and metadata.
         Automatically tracks link creation activity.
         """
-        Issue.objects.get(workspace__slug=slug, project_id=project_id, pk=issue_id)
+        Issue.formal_objects.get(workspace__slug=slug, project_id=project_id, pk=issue_id)
         serializer = IssueLinkCreateSerializer(data=request.data)
         if serializer.is_valid():
             serializer.save(project_id=project_id, issue_id=issue_id)
-            crawl_work_item_link_title.delay(serializer.instance.id, serializer.instance.url)
+            enqueue_after_commit(crawl_work_item_link_title, serializer.instance.id, serializer.instance.url)
             link = IssueLink.objects.get(pk=serializer.instance.id)
-            issue_activity.delay(
+            enqueue_after_commit(
+                issue_activity,
                 type="link.activity.created",
                 requested_data=json.dumps(serializer.data, cls=DjangoJSONEncoder),
                 issue_id=str(self.kwargs.get("issue_id")),
@@ -1308,7 +1320,7 @@ class IssueLinkDetailAPIEndpoint(BaseAPIView):
 
     def get_queryset(self):
         slug = self.kwargs.get("slug")
-        issue = Issue.objects.get(
+        issue = Issue.formal_objects.get(
             workspace__slug=slug,
             project_id=self.kwargs.get("project_id"),
             pk=self.kwargs.get("issue_id"),
@@ -1404,8 +1416,9 @@ class IssueLinkDetailAPIEndpoint(BaseAPIView):
             serializer.save()
             updated_url = serializer.data.get("url")
             if updated_url and updated_url != previous_url:
-                crawl_work_item_link_title.delay(serializer.data.get("id"), updated_url)
-            issue_activity.delay(
+                enqueue_after_commit(crawl_work_item_link_title, serializer.data.get("id"), updated_url)
+            enqueue_after_commit(
+                issue_activity,
                 type="link.activity.updated",
                 requested_data=requested_data,
                 actor_id=str(request.user.id),
@@ -1438,7 +1451,8 @@ class IssueLinkDetailAPIEndpoint(BaseAPIView):
         """
         issue_link = IssueLink.objects.get(workspace__slug=slug, project_id=project_id, issue_id=issue_id, pk=pk)
         current_instance = json.dumps(IssueLinkSerializer(issue_link).data, cls=DjangoJSONEncoder)
-        issue_activity.delay(
+        enqueue_after_commit(
+            issue_activity,
             type="link.activity.deleted",
             requested_data=json.dumps({"link_id": str(pk)}),
             actor_id=str(request.user.id),
@@ -1462,7 +1476,7 @@ class IssueCommentListCreateAPIEndpoint(BaseAPIView):
 
     def get_queryset(self):
         slug = self.kwargs.get("slug")
-        issue = Issue.objects.get(
+        issue = Issue.formal_objects.get(
             workspace__slug=slug,
             project_id=self.kwargs.get("project_id"),
             pk=self.kwargs.get("issue_id"),
@@ -1554,7 +1568,7 @@ class IssueCommentListCreateAPIEndpoint(BaseAPIView):
         Add a new comment to a work item with HTML content.
         Supports external ID tracking for integration purposes.
         """
-        issue = Issue.objects.get(workspace__slug=slug, project_id=project_id, pk=issue_id)
+        issue = Issue.formal_objects.get(workspace__slug=slug, project_id=project_id, pk=issue_id)
         if guest_cannot_view_issue(request.user.id, issue, slug):
             raise Issue.DoesNotExist()
 
@@ -1588,7 +1602,8 @@ class IssueCommentListCreateAPIEndpoint(BaseAPIView):
             serializer.save(project_id=project_id, issue_id=issue_id, actor=request.user)
             issue_comment = IssueComment.objects.get(pk=serializer.instance.id)
 
-            issue_activity.delay(
+            enqueue_after_commit(
+                issue_activity,
                 type="comment.activity.created",
                 requested_data=json.dumps(serializer.data, cls=DjangoJSONEncoder),
                 actor_id=str(issue_comment.created_by_id),
@@ -1599,7 +1614,8 @@ class IssueCommentListCreateAPIEndpoint(BaseAPIView):
             )
 
             # Send the model activity
-            model_activity.delay(
+            enqueue_after_commit(
+                model_activity,
                 model_name="issue_comment",
                 model_id=str(serializer.instance.id),
                 requested_data=request.data,
@@ -1625,7 +1641,7 @@ class IssueCommentDetailAPIEndpoint(BaseAPIView):
 
     def get_queryset(self):
         slug = self.kwargs.get("slug")
-        issue = Issue.objects.get(
+        issue = Issue.formal_objects.get(
             workspace__slug=slug,
             project_id=self.kwargs.get("project_id"),
             pk=self.kwargs.get("issue_id"),
@@ -1711,7 +1727,7 @@ class IssueCommentDetailAPIEndpoint(BaseAPIView):
         Modify the content of an existing comment on a work item.
         Validates external ID uniqueness if provided.
         """
-        issue = Issue.objects.get(workspace__slug=slug, project_id=project_id, pk=issue_id)
+        issue = Issue.formal_objects.get(workspace__slug=slug, project_id=project_id, pk=issue_id)
         # admins (including a workspace admin with a project GUEST role) skip the guest visibility gate
         is_admin = is_project_or_workspace_admin(request.user.id, project_id, slug)
         if not is_admin and guest_cannot_view_issue(request.user.id, issue, slug):
@@ -1750,7 +1766,8 @@ class IssueCommentDetailAPIEndpoint(BaseAPIView):
         serializer = IssueCommentCreateSerializer(issue_comment, data=request.data, partial=True)
         if serializer.is_valid():
             serializer.save()
-            issue_activity.delay(
+            enqueue_after_commit(
+                issue_activity,
                 type="comment.activity.updated",
                 requested_data=requested_data,
                 actor_id=str(request.user.id),
@@ -1760,7 +1777,8 @@ class IssueCommentDetailAPIEndpoint(BaseAPIView):
                 epoch=int(timezone.now().timestamp()),
             )
             # Send the model activity
-            model_activity.delay(
+            enqueue_after_commit(
+                model_activity,
                 model_name="issue_comment",
                 model_id=str(pk),
                 requested_data=request.data,
@@ -1794,7 +1812,7 @@ class IssueCommentDetailAPIEndpoint(BaseAPIView):
         Permanently remove a comment from a work item.
         Records deletion activity for audit purposes.
         """
-        issue = Issue.objects.get(workspace__slug=slug, project_id=project_id, pk=issue_id)
+        issue = Issue.formal_objects.get(workspace__slug=slug, project_id=project_id, pk=issue_id)
         # admins (including a workspace admin with a project GUEST role) skip the guest visibility gate
         is_admin = is_project_or_workspace_admin(request.user.id, project_id, slug)
         if not is_admin and guest_cannot_view_issue(request.user.id, issue, slug):
@@ -1810,7 +1828,8 @@ class IssueCommentDetailAPIEndpoint(BaseAPIView):
             )
         current_instance = json.dumps(IssueCommentSerializer(issue_comment).data, cls=DjangoJSONEncoder)
         issue_comment.delete()
-        issue_activity.delay(
+        enqueue_after_commit(
+            issue_activity,
             type="comment.activity.deleted",
             requested_data=json.dumps({"comment_id": str(pk)}),
             actor_id=str(request.user.id),
@@ -1854,7 +1873,7 @@ class IssueActivityListAPIEndpoint(BaseAPIView):
         Retrieve chronological activity logs for an issue.
         Excludes comment, vote, reaction, and draft activities.
         """
-        issue = Issue.objects.get(workspace__slug=slug, project_id=project_id, pk=issue_id)
+        issue = Issue.formal_objects.get(workspace__slug=slug, project_id=project_id, pk=issue_id)
         if guest_cannot_view_issue(request.user.id, issue, slug):
             raise Issue.DoesNotExist()
 
@@ -1915,7 +1934,7 @@ class IssueActivityDetailAPIEndpoint(BaseAPIView):
         Retrieve details of a specific activity.
         Excludes comment, vote, reaction, and draft activities.
         """
-        issue = Issue.objects.get(workspace__slug=slug, project_id=project_id, pk=issue_id)
+        issue = Issue.formal_objects.get(workspace__slug=slug, project_id=project_id, pk=issue_id)
         if guest_cannot_view_issue(request.user.id, issue, slug):
             raise Issue.DoesNotExist()
 
@@ -2028,7 +2047,7 @@ class IssueAttachmentListCreateAPIEndpoint(BaseAPIView):
         Generate presigned URL for uploading file attachments to a work item.
         Validates file type and size before creating the attachment record.
         """
-        issue = Issue.objects.get(pk=issue_id, workspace__slug=slug, project_id=project_id)
+        issue = Issue.formal_objects.get(pk=issue_id, workspace__slug=slug, project_id=project_id)
         # if the user is creator or admin,member then allow the upload
         if not user_has_issue_permission(
             request.user.id,
@@ -2163,7 +2182,7 @@ class IssueAttachmentListCreateAPIEndpoint(BaseAPIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-        issue = Issue.objects.get(pk=issue_id, workspace__slug=slug, project_id=project_id)
+        issue = Issue.formal_objects.get(pk=issue_id, workspace__slug=slug, project_id=project_id)
         if guest_cannot_view_issue(request.user.id, issue, slug):
             raise Issue.DoesNotExist()
 
@@ -2205,7 +2224,7 @@ class IssueAttachmentDetailAPIEndpoint(BaseAPIView):
         Soft delete an attachment from a work item by marking it as deleted.
         Records deletion activity and triggers metadata cleanup.
         """
-        issue = Issue.objects.get(pk=issue_id, workspace__slug=slug, project_id=project_id)
+        issue = Issue.formal_objects.get(pk=issue_id, workspace__slug=slug, project_id=project_id)
         # admins (including a workspace admin with a project GUEST role) skip the guest visibility gate
         is_admin = is_project_or_workspace_admin(request.user.id, project_id, slug)
         if not is_admin and guest_cannot_view_issue(request.user.id, issue, slug):
@@ -2237,7 +2256,8 @@ class IssueAttachmentDetailAPIEndpoint(BaseAPIView):
         issue_attachment.deleted_at = timezone.now()
         issue_attachment.save()
 
-        issue_activity.delay(
+        enqueue_after_commit(
+            issue_activity,
             type="attachment.activity.deleted",
             requested_data=None,
             actor_id=str(self.request.user.id),
@@ -2251,7 +2271,7 @@ class IssueAttachmentDetailAPIEndpoint(BaseAPIView):
 
         # Get the storage metadata
         if not issue_attachment.storage_metadata:
-            get_asset_object_metadata.delay(str(issue_attachment.id))
+            enqueue_after_commit(get_asset_object_metadata, str(issue_attachment.id))
         issue_attachment.save()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
@@ -2305,7 +2325,7 @@ class IssueAttachmentDetailAPIEndpoint(BaseAPIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-        issue = Issue.objects.get(pk=issue_id, workspace__slug=slug, project_id=project_id)
+        issue = Issue.formal_objects.get(pk=issue_id, workspace__slug=slug, project_id=project_id)
         if guest_cannot_view_issue(request.user.id, issue, slug):
             raise Issue.DoesNotExist()
 
@@ -2366,7 +2386,7 @@ class IssueAttachmentDetailAPIEndpoint(BaseAPIView):
         Triggers activity logging and metadata extraction.
         """
 
-        issue = Issue.objects.get(pk=issue_id, workspace__slug=slug, project_id=project_id)
+        issue = Issue.formal_objects.get(pk=issue_id, workspace__slug=slug, project_id=project_id)
         # if the user is creator or admin then allow the upload
         if not user_has_issue_permission(
             request.user.id,
@@ -2394,7 +2414,8 @@ class IssueAttachmentDetailAPIEndpoint(BaseAPIView):
 
         # Send this activity only if the attachment is not uploaded before
         if not issue_attachment.is_uploaded:
-            issue_activity.delay(
+            enqueue_after_commit(
+                issue_activity,
                 type="attachment.activity.created",
                 requested_data=None,
                 actor_id=str(self.request.user.id),
@@ -2412,7 +2433,7 @@ class IssueAttachmentDetailAPIEndpoint(BaseAPIView):
 
         # Get the storage metadata
         if not issue_attachment.storage_metadata:
-            get_asset_object_metadata.delay(str(issue_attachment.id))
+            enqueue_after_commit(get_asset_object_metadata, str(issue_attachment.id))
         issue_attachment.save()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
@@ -2576,12 +2597,12 @@ class IssueRelationListCreateAPIEndpoint(BaseAPIView):
         Retrieve all relationships for a work item organized by relation type.
         Returns a structured response with relations grouped by type.
         """
-        issue = Issue.objects.get(workspace__slug=slug, project_id=project_id, pk=issue_id)
+        issue = Issue.formal_objects.get(workspace__slug=slug, project_id=project_id, pk=issue_id)
         if guest_cannot_view_issue(request.user.id, issue, slug):
             raise Issue.DoesNotExist()
 
         # Only list related work items the caller may view.
-        visible_issue_ids = Issue.objects.filter(visible_issue_q(request.user)).values("id")
+        visible_issue_ids = Issue.formal_objects.filter(visible_issue_q(request.user)).values("id")
         relations = IssueRelation.objects.filter(
             Q(issue_id=issue_id, related_issue_id__in=visible_issue_ids)
             | Q(related_issue_id=issue_id, issue_id__in=visible_issue_ids),
@@ -2758,7 +2779,8 @@ class IssueRelationListCreateAPIEndpoint(BaseAPIView):
             ignore_conflicts=True,
         )
 
-        issue_activity.delay(
+        enqueue_after_commit(
+            issue_activity,
             type="issue_relation.activity.created",
             requested_data=json.dumps({"relation_type": relation_type, "issues": issues}, cls=DjangoJSONEncoder),
             actor_id=str(request.user.id),

@@ -1,0 +1,119 @@
+name: Project workflow tests
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "apps/api/**"
+      - "apps/web/**"
+      - "packages/**"
+      - "pnpm-lock.yaml"
+      - ".github/workflows/project-workflow-tests.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: workflow-tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  workflow-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      DJANGO_SETTINGS_MODULE: plane.settings.test
+      SECRET_KEY: workflow-ci-disposable-test-key
+      DATABASE_URL: postgresql://plane:plane@127.0.0.1:5432/plane
+      REDIS_URL: redis://127.0.0.1:6379/0
+      AMQP_URL: amqp://plane:plane@127.0.0.1:5672//
+      WEB_URL: http://testserver
+      APP_BASE_URL: http://testserver
+      EMAIL_HOST: test-smtp.invalid
+      AWS_S3_BUCKET_NAME: uploads
+      AWS_ACCESS_KEY_ID: workflow-test-key
+      AWS_SECRET_ACCESS_KEY: workflow-test-secret
+      AWS_S3_ENDPOINT_URL: http://127.0.0.1:9000
+      NODE_OPTIONS: --max-old-space-size=4096
+    services:
+      postgres:
+        image: postgres:15.7-alpine
+        env:
+          POSTGRES_USER: plane
+          POSTGRES_PASSWORD: plane
+          POSTGRES_DB: plane
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U plane -d plane"
+          --health-interval 5s --health-timeout 5s --health-retries 15
+      redis:
+        image: valkey/valkey:7.2.11-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "valkey-cli ping"
+          --health-interval 5s --health-timeout 5s --health-retries 15
+      rabbitmq:
+        image: rabbitmq:3.13.6-alpine
+        env:
+          RABBITMQ_DEFAULT_USER: plane
+          RABBITMQ_DEFAULT_PASS: plane
+        ports: ["5672:5672"]
+        options: >-
+          --health-cmd "rabbitmq-diagnostics -q ping"
+          --health-interval 10s --health-timeout 10s --health-retries 15
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+      - run: corepack enable pnpm
+      - uses: astral-sh/setup-uv@v7
+        with:
+          version-file: apps/api/pyproject.toml
+          python-version: "3.12.12"
+          enable-cache: true
+          cache-dependency-glob: apps/api/uv.lock
+      - name: Install dependencies
+        run: |
+          pnpm install --frozen-lockfile
+          cd apps/api
+          uv sync --locked
+      - name: Apply real migrations and check drift
+        working-directory: apps/api
+        run: |
+          uv run --no-sync python manage.py migrate --noinput
+          uv run --no-sync python manage.py check
+          uv run --no-sync python manage.py makemigrations --check --dry-run
+      - name: API regression including PostgreSQL concurrency tests
+        working-directory: apps/api
+        run: uv run --no-sync pytest
+      - name: Build dependencies and check Web
+        run: |
+          pnpm turbo run build --filter='web^...'
+          pnpm --filter web check:types
+          pnpm --filter web test
+          pnpm --filter web build
+      - name: Install browser
+        working-directory: apps/web
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Seed isolated browser fixture
+        working-directory: apps/api
+        env:
+          WORKFLOW_E2E_ALLOW_SEED: "1"
+        run: uv run --no-sync python ../web/e2e/seed.py
+      - name: Run real browser workflow tests
+        env:
+          WEB_URL: http://127.0.0.1:3107
+          APP_BASE_URL: http://127.0.0.1:3107
+          VITE_API_BASE_URL: http://127.0.0.1:8127
+          VITE_WEB_BASE_URL: http://127.0.0.1:3107
+        run: |
+          cd apps/api
+          uv run --no-sync python manage.py runserver 127.0.0.1:8127 --noreload > /tmp/workflow-api.log 2>&1 &
+          cd ../..
+          pnpm --filter web exec react-router dev --port 3107 > /tmp/workflow-web.log 2>&1 &
+          curl --retry 15 --retry-delay 2 --retry-connrefused --fail http://127.0.0.1:8127/api/instances/
+          curl --retry 15 --retry-delay 2 --retry-connrefused --fail http://127.0.0.1:3107/
+          export WORKFLOW_E2E_CHROMIUM=$(rg --files --hidden "$HOME/.cache/ms-playwright" | rg '/chrome-linux[^/]*/chrome$' | head -1)
+          test -n "$WORKFLOW_E2E_CHROMIUM"
+          pnpm --filter web test:e2e

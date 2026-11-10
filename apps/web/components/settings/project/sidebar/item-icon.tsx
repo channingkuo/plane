@@ -25,6 +25,7 @@ import { SettingIcon } from "@/components/icons/attachment";
 
 export const PROJECT_SETTINGS_ICONS: Record<TProjectSettingsTabs, IconGlyph | React.FC<ISvgIcons>> = {
   general: SettingIcon,
+  workflow: TriggerOutline,
   members: MembersOutline,
   features_cycles: CyclesOutline,
   features_modules: ModuleOutline,

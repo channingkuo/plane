@@ -20,6 +20,7 @@ export type TWorkspaceSettingsItem = {
 };
 
 export type TProjectSettingsTabs =
+  | "workflow"
   | "general"
   | "members"
   | "features_cycles"

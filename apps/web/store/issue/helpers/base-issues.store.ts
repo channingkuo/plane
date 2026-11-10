@@ -34,6 +34,7 @@ import { convertToISODateString } from "@plane/utils";
 import { CycleService } from "@/services/cycle.service";
 import { IssueArchiveService, IssueService } from "@/services/issue";
 import { ModuleService } from "@/services/module.service";
+import { workflowService } from "@/services/workflow.service";
 //
 import type { IIssueRootStore } from "../root.store";
 import {
@@ -535,12 +536,45 @@ export abstract class BaseIssuesStore implements IBaseIssuesStore {
 
     // add Issue to Store
     this.addIssue(response, shouldUpdateList);
+    await this.reconcileWorkflowIssues(workspaceSlug, projectId, [response.parent_id]);
 
     // If shouldUpdateList is true, call fetchParentStats
     // oxlint-disable-next-line no-unused-expressions
     shouldUpdateList && (await this.fetchParentStats(workspaceSlug, projectId));
 
     return response;
+  }
+
+  /** Refresh server-computed states once per mutation, including both sides of reparenting. */
+  private async reconcileWorkflowIssues(
+    workspaceSlug: string,
+    projectId: string,
+    issueIds: (string | null | undefined)[]
+  ) {
+    const workflow = await workflowService.creation(workspaceSlug, projectId).catch(() => null);
+    if (!workflow?.enabled) return;
+    const pending = new Set(issueIds.filter((id): id is string => !!id));
+    const visited = new Set<string>();
+    while (pending.size) {
+      const ids = [...pending].filter((id) => !visited.has(id));
+      pending.clear();
+      ids.forEach((id) => visited.add(id));
+      // Each level reveals the next ancestor IDs, so levels must be fetched in order.
+      // eslint-disable-next-line no-await-in-loop
+      const rows = await Promise.all(
+        ids.map(async (id) => ({
+          previous: clone(this.rootIssueStore.issues.getIssueById(id)),
+          issue: await this.issueService.retrieve(workspaceSlug, projectId, id).catch(() => null),
+        }))
+      );
+      for (const { previous, issue } of rows) {
+        if (!issue) continue;
+        this.rootIssueStore.issues.updateIssue(issue.id, issue);
+        if (previous) this.updateIssueList(issue, previous);
+        if (issue.parent_id) pending.add(issue.parent_id);
+      }
+    }
+    window.dispatchEvent(new CustomEvent("plane:workflow-updated", { detail: { workspaceSlug, projectId } }));
   }
 
   /**
@@ -576,7 +610,17 @@ export abstract class BaseIssuesStore implements IBaseIssuesStore {
       } as TIssue);
 
       // call API to update the issue
-      await this.issueService.patchIssue(workspaceSlug, projectId, issueId, data);
+      const updatedIssue = await this.issueService.patchIssue(workspaceSlug, projectId, issueId, data);
+      if (updatedIssue?.id === issueId) {
+        this.rootIssueStore.issues.updateIssue(issueId, updatedIssue);
+        this.updateIssueList(updatedIssue, { ...issueBeforeUpdate, ...data } as TIssue);
+      }
+
+      await this.reconcileWorkflowIssues(workspaceSlug, projectId, [
+        issueBeforeUpdate?.parent_id,
+        updatedIssue?.parent_id,
+        data.parent_id,
+      ]);
 
       // call fetch Parent Stats
       this.fetchParentStats(workspaceSlug, projectId);
@@ -584,6 +628,8 @@ export abstract class BaseIssuesStore implements IBaseIssuesStore {
       // If errored out update store again to revert the change
       this.rootIssueStore.issues.updateIssue(issueId, issueBeforeUpdate ?? {});
       this.updateIssueList(issueBeforeUpdate, { ...issueBeforeUpdate, ...data } as TIssue);
+      this.updateParentStats({ ...issueBeforeUpdate, ...data } as TIssue, issueBeforeUpdate);
+      this.fetchParentStats(workspaceSlug, projectId);
       throw error;
     }
   }
@@ -601,7 +647,14 @@ export abstract class BaseIssuesStore implements IBaseIssuesStore {
     this.updateParentStats(issueBeforeRemoval, undefined);
 
     // Male API call
-    await this.issueService.deleteIssue(workspaceSlug, projectId, issueId);
+    try {
+      await this.issueService.deleteIssue(workspaceSlug, projectId, issueId);
+    } catch (error) {
+      this.updateParentStats(undefined, issueBeforeRemoval);
+      this.fetchParentStats(workspaceSlug, projectId);
+      throw error;
+    }
+    await this.reconcileWorkflowIssues(workspaceSlug, projectId, [issueBeforeRemoval?.parent_id]);
     // Remove from Respective issue Id list
     runInAction(() => {
       this.removeIssueFromList(issueId);
@@ -751,31 +804,33 @@ export abstract class BaseIssuesStore implements IBaseIssuesStore {
         this.updateIssueList(issueDetails, issueBeforeUpdate);
       });
     });
+    await this.reconcileWorkflowIssues(workspaceSlug, projectId, issueIds);
+    this.fetchParentStats(workspaceSlug, projectId);
   };
 
   async updateIssueDates(
     workspaceSlug: string,
-    updates: { id: string; start_date?: string; target_date?: string }[],
+    updates: { id: string; start_date?: string | null; target_date?: string | null }[],
     projectId?: string
   ) {
     if (!projectId) return;
-    const issueDatesBeforeChange: { id: string; start_date?: string; target_date?: string }[] = [];
+    const issueDatesBeforeChange: { id: string; start_date?: string | null; target_date?: string | null }[] = [];
     try {
       const getIssueById = this.rootIssueStore.issues.getIssueById;
       runInAction(() => {
         // oxlint-disable-next-line no-shadow
         for (const update of updates) {
           const dates: Partial<TIssue> = {};
-          if (update.start_date) dates.start_date = update.start_date;
-          if (update.target_date) dates.target_date = update.target_date;
+          if ("start_date" in update) dates.start_date = update.start_date;
+          if ("target_date" in update) dates.target_date = update.target_date;
 
           const currIssue = getIssueById(update.id);
 
           if (currIssue) {
             issueDatesBeforeChange.push({
               id: update.id,
-              start_date: currIssue.start_date ?? undefined,
-              target_date: currIssue.target_date ?? undefined,
+              start_date: currIssue.start_date ?? null,
+              target_date: currIssue.target_date ?? null,
             });
           }
 
@@ -784,13 +839,19 @@ export abstract class BaseIssuesStore implements IBaseIssuesStore {
       });
 
       await this.issueService.updateIssueDates(workspaceSlug, projectId, updates);
+      await this.reconcileWorkflowIssues(
+        workspaceSlug,
+        projectId,
+        updates.map((item) => item.id)
+      );
+      this.fetchParentStats(workspaceSlug, projectId);
     } catch (e) {
       runInAction(() => {
         // oxlint-disable-next-line no-shadow
         for (const update of issueDatesBeforeChange) {
           const dates: Partial<TIssue> = {};
-          if (update.start_date) dates.start_date = update.start_date;
-          if (update.target_date) dates.target_date = update.target_date;
+          if ("start_date" in update) dates.start_date = update.start_date;
+          if ("target_date" in update) dates.target_date = update.target_date;
 
           this.issueUpdate(workspaceSlug, projectId, update.id, dates, false);
         }

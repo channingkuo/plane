@@ -264,7 +264,7 @@ class GlobalSearchEndpoint(BaseAPIView):
                     q |= Q(**{f"{field}__icontains": query})
 
         # Guests only see intake issues they created unless guest_view_all_features
-        issues = Issue.objects.filter(
+        issues = Issue.formal_objects.filter(
             q,
             Q(project__project_projectmember__role__gt=ROLE.GUEST.value)
             | Q(project__guest_view_all_features=True)

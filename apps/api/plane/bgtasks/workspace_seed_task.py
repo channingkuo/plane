@@ -2,6 +2,9 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # See the LICENSE file for details.
 
+from django.db import transaction
+from plane.services.workflow.seeding import record_new_project_sources
+
 # Python imports
 import os
 import json
@@ -502,6 +505,7 @@ def create_views(workspace: Workspace, project_map: Dict[int, uuid.UUID], bot_us
 
 
 @shared_task
+@transaction.atomic
 def workspace_seed(workspace_id: uuid.UUID) -> None:
     """Seeds a new workspace with initial project data.
 
@@ -563,6 +567,9 @@ def workspace_seed(workspace_id: uuid.UUID) -> None:
 
         # create project pages
         create_pages(workspace, project_map, bot_user)
+
+        for project_id in project_map.values():
+            record_new_project_sources(Project.objects.get(pk=project_id), bot_user)
 
         logger.info(f"Task: workspace_seed_task -> Workspace {workspace_id} seeded successfully")
         return

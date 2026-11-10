@@ -201,7 +201,7 @@ class EstimatePointEndpoint(BaseViewSet):
         )
         # update all the issues with the new estimate
         if new_estimate_id:
-            issues = Issue.objects.filter(
+            issues = Issue.formal_objects.filter(
                 project_id=project_id,
                 workspace__slug=slug,
                 estimate_point_id=estimate_point_id,
@@ -220,7 +220,7 @@ class EstimatePointEndpoint(BaseViewSet):
                 )
                 issues.update(estimate_point_id=new_estimate_id)
         else:
-            issues = Issue.objects.filter(
+            issues = Issue.formal_objects.filter(
                 project_id=project_id,
                 workspace__slug=slug,
                 estimate_point_id=estimate_point_id,

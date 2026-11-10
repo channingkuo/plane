@@ -1,3 +1,5 @@
+import useSWR from "swr";
+import { workflowService } from "@/services/workflow.service";
 /**
  * Copyright (c) 2023-present Plane Software, Inc. and contributors
  * SPDX-License-Identifier: AGPL-3.0-only
@@ -91,6 +93,9 @@ export const InboxIssueActionsHeader = observer(function InboxIssueActionsHeader
   const { getProjectById } = useProject();
 
   const issue = inboxIssue?.issue;
+  const { data: workflow } = useSWR(issue?.id ? ["intake-workflow", workspaceSlug, projectId, issue.id] : null, () =>
+    workflowService.issue(workspaceSlug, projectId, issue!.id!)
+  );
   // derived values
   const isAllowed = allowPermissions(
     [EUserPermissions.ADMIN, EUserPermissions.MEMBER],
@@ -99,7 +104,10 @@ export const InboxIssueActionsHeader = observer(function InboxIssueActionsHeader
     projectId
   );
   const canMarkAsDuplicate = isAllowed && (inboxIssue?.status === 0 || inboxIssue?.status === -2);
-  const canMarkAsAccepted = isAllowed && (inboxIssue?.status === 0 || inboxIssue?.status === -2);
+  const canMarkAsAccepted =
+    isAllowed &&
+    (inboxIssue?.status === 0 || inboxIssue?.status === -2) &&
+    (!workflow?.enabled || !!workflow.can_accept);
   const canMarkAsDeclined = isAllowed && (inboxIssue?.status === 0 || inboxIssue?.status === -2);
   // can delete only if admin or is creator of the issue
   const canDelete =
@@ -165,9 +173,8 @@ export const InboxIssueActionsHeader = observer(function InboxIssueActionsHeader
 
   const handleInboxIssueDelete = async () => {
     if (!inboxIssue || !currentInboxIssueId) return;
-    await deleteInboxIssue(workspaceSlug, projectId, currentInboxIssueId).then(() => {
-      if (!isNotificationEmbed) router.push(`/${workspaceSlug}/projects/${projectId}/intake`);
-    });
+    await deleteInboxIssue(workspaceSlug, projectId, currentInboxIssueId);
+    if (!isNotificationEmbed) router.push(`/${workspaceSlug}/projects/${projectId}/intake`);
   };
 
   const handleIssueSnoozeAction = async () => {

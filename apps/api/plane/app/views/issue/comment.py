@@ -98,7 +98,7 @@ class IssueCommentViewSet(BaseViewSet):
         # it, so a bare pk lookup let any project member comment on an issue in another
         # project/workspace — and read that issue's full `issue_detail` back out of the 201
         # response.
-        issue = Issue.objects.filter(pk=issue_id, workspace__slug=slug, project_id=project_id).first()
+        issue = Issue.formal_objects.filter(pk=issue_id, workspace__slug=slug, project_id=project_id).first()
         if issue is None:
             return Response({"error": "Issue not found"}, status=status.HTTP_404_NOT_FOUND)
         if (

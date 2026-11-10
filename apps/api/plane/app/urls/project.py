@@ -3,6 +3,8 @@
 # See the LICENSE file for details.
 
 from django.urls import path
+from plane.app.views.workflow import ProjectWorkflowEndpoint, ProjectWorkflowValidationEndpoint
+from plane.app.views.workflow import IssueWorkflowEndpoint, WorkflowCreationContextEndpoint
 
 from plane.app.views import (
     ProjectViewSet,
@@ -22,6 +24,31 @@ from plane.app.views import (
 
 
 urlpatterns = [
+    path(
+        "workspaces/<str:slug>/projects/<uuid:project_id>/workflow/creation/",
+        WorkflowCreationContextEndpoint.as_view(),
+        name="workflow-creation-context",
+    ),
+    path(
+        "workspaces/<str:slug>/projects/<uuid:project_id>/issues/<uuid:issue_id>/workflow/",
+        IssueWorkflowEndpoint.as_view(),
+        name="issue-workflow",
+    ),
+    path(
+        "workspaces/<str:slug>/projects/<uuid:project_id>/issues/<uuid:issue_id>/workflow/preview/",
+        IssueWorkflowEndpoint.as_view(),
+        name="issue-workflow-preview",
+    ),
+    path(
+        "workspaces/<str:slug>/projects/<uuid:project_id>/workflow/",
+        ProjectWorkflowEndpoint.as_view(),
+        name="project-workflow",
+    ),
+    path(
+        "workspaces/<str:slug>/projects/<uuid:project_id>/workflow/validate/",
+        ProjectWorkflowValidationEndpoint.as_view(),
+        name="project-workflow-validate",
+    ),
     path(
         "workspaces/<str:slug>/projects/",
         ProjectViewSet.as_view({"get": "list", "post": "create"}),

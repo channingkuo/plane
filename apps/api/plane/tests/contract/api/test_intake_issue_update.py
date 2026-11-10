@@ -86,7 +86,7 @@ class TestIntakeIssueUpdateContract:
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         assert list(intake_issue.labels.all()) == []
 
-    @pytest.mark.django_db
+    @pytest.mark.django_db(transaction=True)
     def test_update_ignores_archived_at_and_records_no_archive_activity(
         self, api_key_client, workspace, project, intake_issue
     ):

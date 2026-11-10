@@ -55,7 +55,7 @@ class NotificationViewSet(BaseViewSet, BasePaginator):
         mentioned = request.GET.get("mentioned", False)
         q_filters = Q()
 
-        intake_issue = Issue.objects.filter(
+        intake_issue = Issue.formal_objects.filter(
             pk=OuterRef("entity_identifier"),
             issue_intake__status__in=[0, 2, -2],
             workspace__slug=self.kwargs.get("slug"),
@@ -108,7 +108,7 @@ class NotificationViewSet(BaseViewSet, BasePaginator):
         if "subscribed" in type:
             issue_ids = (
                 IssueSubscriber.objects.filter(workspace__slug=slug, subscriber_id=request.user.id)
-                .annotate(created=Exists(Issue.objects.filter(created_by=request.user, pk=OuterRef("issue_id"))))
+                .annotate(created=Exists(Issue.formal_objects.filter(created_by=request.user, pk=OuterRef("issue_id"))))
                 .annotate(assigned=Exists(IssueAssignee.objects.filter(pk=OuterRef("issue_id"), assignee=request.user)))
                 .filter(created=False, assigned=False)
                 .values_list("issue_id", flat=True)
@@ -129,7 +129,7 @@ class NotificationViewSet(BaseViewSet, BasePaginator):
             ).exists():
                 notifications = notifications.none()
             else:
-                issue_ids = Issue.objects.filter(workspace__slug=slug, created_by=request.user).values_list(
+                issue_ids = Issue.formal_objects.filter(workspace__slug=slug, created_by=request.user).values_list(
                     "pk", flat=True
                 )
                 q_filters |= Q(entity_identifier__in=issue_ids)
@@ -280,7 +280,7 @@ class MarkAllReadNotificationViewSet(BaseViewSet):
             ).exists():
                 notifications = Notification.objects.none()
             else:
-                issue_ids = Issue.objects.filter(workspace__slug=slug, created_by=request.user).values_list(
+                issue_ids = Issue.formal_objects.filter(workspace__slug=slug, created_by=request.user).values_list(
                     "pk", flat=True
                 )
                 notifications = notifications.filter(entity_identifier__in=issue_ids)

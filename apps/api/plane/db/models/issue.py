@@ -89,7 +89,22 @@ def get_default_display_properties():
 
 
 # TODO: Handle identifiers for Bulk Inserts - nk
-class IssueManager(SoftDeletionManager):
+class FormalIssueManager(SoftDeletionManager):
+    """Formal work-item queries must not infer Intake acceptance from state groups."""
+
+    def get_queryset(self):
+        return (
+            super()
+            .get_queryset()
+            .exclude(
+                project__workflow__enabled=True,
+                workflow_context__origin="intake",
+                workflow_context__accepted_at__isnull=True,
+            )
+        )
+
+
+class IssueManager(FormalIssueManager):
     def get_queryset(self):
         return (
             super()
@@ -170,6 +185,7 @@ class Issue(ChangeTrackerMixin, ProjectBaseModel):
     )
 
     issue_objects = IssueManager()
+    formal_objects = FormalIssueManager()
 
     class Meta:
         verbose_name = "Issue"

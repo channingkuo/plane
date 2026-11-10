@@ -1126,7 +1126,7 @@ class CycleIssueDetailAPIEndpoint(BaseAPIView):
         Retrieve details of a specific cycle work item.
         Returns paginated results with work item details, assignees, and labels.
         """
-        issue = Issue.objects.get(workspace__slug=slug, project_id=project_id, pk=issue_id)
+        issue = Issue.formal_objects.get(workspace__slug=slug, project_id=project_id, pk=issue_id)
         if guest_cannot_view_issue(request.user.id, issue, slug):
             raise Issue.DoesNotExist()
 

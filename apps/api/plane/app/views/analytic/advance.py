@@ -86,7 +86,7 @@ class AdvanceAnalyticsEndpoint(AdvanceAnalyticsBaseView):
             "total_work_items": self.get_filtered_counts(Issue.issue_objects.filter(**self.filters["base_filters"])),
             "total_cycles": self.get_filtered_counts(Cycle.objects.filter(**self.filters["base_filters"])),
             "total_intake": self.get_filtered_counts(
-                Issue.objects.filter(**self.filters["base_filters"]).filter(
+                Issue.formal_objects.filter(**self.filters["base_filters"]).filter(
                     issue_intake__status__in=["-2", "-1", "0", "1", "2"]  # TODO: Add description for reference.
                 )
             ),

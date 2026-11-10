@@ -47,7 +47,7 @@ class IssueLinkViewSet(BaseViewSet):
 
     def create(self, request, slug, project_id, issue_id):
         # The URL issue must belong to the URL workspace + project (404 otherwise).
-        Issue.objects.get(pk=issue_id, workspace__slug=slug, project_id=project_id)
+        Issue.formal_objects.get(pk=issue_id, workspace__slug=slug, project_id=project_id)
         serializer = IssueLinkSerializer(data=request.data)
         if serializer.is_valid():
             serializer.save(project_id=project_id, issue_id=issue_id)

@@ -2,6 +2,9 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # See the LICENSE file for details.
 
+from django.db import transaction
+from plane.services.workflow.seeding import record_new_project_sources
+
 # Python imports
 import uuid
 import random
@@ -485,6 +488,7 @@ def create_module_issues(workspace, project, user_id, issue_count):
 
 
 @shared_task
+@transaction.atomic
 def create_dummy_data(
     slug,
     email,
@@ -550,4 +554,5 @@ def create_dummy_data(
     # create module issues
     create_module_issues(workspace=workspace, project=project, user_id=user_id, issue_count=issue_count)
 
+    record_new_project_sources(project, user)
     return

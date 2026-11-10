@@ -92,6 +92,7 @@ export const IssueDefaultProperties = observer(function IssueDefaultProperties(p
         name="state_id"
         render={({ field: { value, onChange } }) => (
           <StateSelect
+            isForWorkItemCreation
             testId="create-work-item-state-select"
             // an empty state shows the project's default state, as the legacy dropdown did
             value={value || getProjectDefaultStateId(projectId)}

@@ -2,6 +2,8 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # See the LICENSE file for details.
 
+from plane.db.models import ProjectWorkflow
+
 # Module imports
 from .base import BaseSerializer
 from .issue import IssueExpandSerializer
@@ -124,7 +126,10 @@ class IntakeIssueUpdateSerializer(BaseSerializer):
             )
 
         # Check if status is being updated to accepted
-        if attrs.get("status") == 1:
+        if (
+            attrs.get("status") == 1
+            and not ProjectWorkflow.objects.filter(project_id=self.instance.project_id, enabled=True).exists()
+        ):
             intake_issue = self.instance
             issue = intake_issue.issue
 
@@ -148,10 +153,21 @@ class IntakeIssueUpdateSerializer(BaseSerializer):
         """
 
         # Update the intake issue with validated data
+        if (
+            validated_data.get("status") == 1
+            and ProjectWorkflow.objects.filter(project_id=instance.project_id, enabled=True).exists()
+        ):
+            from plane.services.workflow.intake import accept_intake
+
+            return accept_intake(self, instance, validated_data)
+
         instance = super().update(instance, validated_data)
 
         # If status is accepted (1), update the associated issue state from TRIAGE to default
-        if validated_data.get("status") == 1:
+        if (
+            validated_data.get("status") == 1
+            and not ProjectWorkflow.objects.filter(project_id=instance.project_id, enabled=True).exists()
+        ):
             issue = instance.issue
             if issue.state and issue.state.group == StateGroup.TRIAGE.value:
                 # Get the default project state

@@ -33,7 +33,14 @@ from plane.app.views import (
     IssueDetailIdentifierEndpoint,
 )
 
+from plane.app.views.workflow import WorkflowBulkUpdateEndpoint
+
 urlpatterns = [
+    path(
+        "workspaces/<str:slug>/projects/<uuid:project_id>/bulk-operation-issues/",
+        WorkflowBulkUpdateEndpoint.as_view(),
+        name="workflow-bulk-issues",
+    ),
     path(
         "workspaces/<str:slug>/projects/<uuid:project_id>/issues/list/",
         IssueListEndpoint.as_view(),

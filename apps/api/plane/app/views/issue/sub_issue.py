@@ -2,6 +2,8 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # See the LICENSE file for details.
 
+from plane.services.workflow.tasks import enqueue_after_commit
+
 # Python imports
 import json
 
@@ -40,9 +42,7 @@ class SubIssuesEndpoint(BaseAPIView):
         # in it, so an unscoped filter leaks sub-issue metadata across projects in the
         # same workspace.
         sub_issues = (
-            Issue.issue_objects.filter(
-                parent_id=issue_id, workspace__slug=slug, project_id=project_id
-            )
+            Issue.issue_objects.filter(parent_id=issue_id, workspace__slug=slug, project_id=project_id)
             .annotate(
                 cycle_id=Subquery(
                     CycleIssue.objects.filter(issue=OuterRef("id"), deleted_at__isnull=True).values("cycle_id")[:1]
@@ -211,9 +211,7 @@ class SubIssuesEndpoint(BaseAPIView):
         # SECURITY: bind the parent issue to the URL workspace + project. A bare
         # pk lookup let any project member re-parent issues under a parent in a
         # different project/workspace.
-        parent_issue = Issue.issue_objects.filter(
-            pk=issue_id, workspace__slug=slug, project_id=project_id
-        ).first()
+        parent_issue = Issue.issue_objects.filter(pk=issue_id, workspace__slug=slug, project_id=project_id).first()
         if parent_issue is None:
             return Response(
                 {"error": "Parent issue not found"},
@@ -228,19 +226,17 @@ class SubIssuesEndpoint(BaseAPIView):
             )
 
         # Scope to workspace + project to prevent cross-project/cross-tenant IDOR
-        sub_issues = Issue.issue_objects.filter(
-            id__in=sub_issue_ids, workspace__slug=slug, project_id=project_id
-        )
+        sub_issues = Issue.issue_objects.filter(id__in=sub_issue_ids, workspace__slug=slug, project_id=project_id)
 
         for sub_issue in sub_issues:
             sub_issue.parent = parent_issue
 
-        _ = Issue.objects.bulk_update(sub_issues, ["parent"], batch_size=10)
+        _ = Issue.formal_objects.bulk_update(sub_issues, ["parent"], batch_size=10)
 
         # Only the issues that were actually re-parented — i.e. the project-scoped
         # `sub_issues`, not the raw caller-supplied ids. Otherwise a cross-project id
         # (excluded from the update above) would still fire issue_activity, whose task
-        # does an unscoped Issue.objects.get and bumps updated_at on a foreign issue.
+        # does an unscoped Issue.formal_objects.get and bumps updated_at on a foreign issue.
         scoped_sub_issue_ids = [str(sub_issue.id) for sub_issue in sub_issues]
 
         updated_sub_issues = Issue.issue_objects.filter(
@@ -249,7 +245,8 @@ class SubIssuesEndpoint(BaseAPIView):
 
         # Track the issue
         _ = [
-            issue_activity.delay(
+            enqueue_after_commit(
+                issue_activity,
                 type="issue.activity.updated",
                 requested_data=json.dumps({"parent": str(issue_id)}),
                 actor_id=str(request.user.id),

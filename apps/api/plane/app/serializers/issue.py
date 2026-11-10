@@ -2,6 +2,8 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # See the LICENSE file for details.
 
+from plane.services.workflow.adapters import prepare_issue
+
 # Django imports
 from django.utils import timezone
 from django.core.validators import URLValidator
@@ -132,8 +134,9 @@ class IssueCreateSerializer(BaseSerializer):
         return data
 
     def validate(self, attrs):
+        attrs = prepare_issue(self, attrs)
         allow_triage = self.context.get("allow_triage_state", False)
-        state_manager = State.triage_objects if allow_triage else State.objects
+        state_manager = State.all_state_objects.filter(deleted_at__isnull=True) if allow_triage else State.objects
 
         if (
             attrs.get("start_date", None) is not None

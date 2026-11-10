@@ -527,6 +527,48 @@
           }
         }
       }
+    },
+    "workflow": {
+      "heading": "Workflow",
+      "description": "Configure project states, transitions, roles and required fields. State groups are maintained in States settings.",
+      "loading": "Loading workflow…",
+      "load_error": "Unable to load workflow or access denied.",
+      "enabled": "Enable workflow",
+      "task_initial_state_id": "Task initial state",
+      "intake_submission_state_id": "Intake submission state",
+      "intake_acceptance_state_id": "Intake acceptance state",
+      "requirement_completed_state_id": "Requirement completion state",
+      "requirement_reopen_state_id": "Requirement reopening state",
+      "system_paths": "Only project administrators can accept Intake submissions. Requirements complete automatically when all descendants are complete and required fields are filled. Reopening a descendant reopens its requirement.",
+      "task": "Tasks",
+      "requirement": "Requirements",
+      "required_paths": "Add required administrator paths",
+      "transitions": "Transitions",
+      "from": "From state",
+      "to": "To state",
+      "role_20": "Administrator",
+      "role_15": "Member",
+      "role_5": "Guest",
+      "remove": "Remove",
+      "add_transition": "Add transition",
+      "requirements": "Required fields for each target state",
+      "assignees": "Assignees",
+      "start_date": "Start date",
+      "target_date": "Due date",
+      "validate": "Validate",
+      "save": "Save configuration",
+      "valid": "Configuration is valid.",
+      "saved": "Workflow configuration saved.",
+      "save_error": "Unable to save. Check states, paths and required fields.",
+      "conflict": "Another administrator updated this configuration. Your input is preserved; reload to use the latest version.",
+      "reload": "Discard input and load latest configuration",
+      "complete_fields": "Complete transition fields",
+      "empty_confirmation": "This requirement has no child work items. Confirm completing it directly.",
+      "apply_transition": "Apply transition",
+      "cancel": "Cancel",
+      "required": "Required",
+      "progress": "Requirement progress",
+      "blocked": "Automatic completion is blocked. Complete the required fields."
     }
   }
 }

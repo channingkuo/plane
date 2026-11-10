@@ -6,6 +6,7 @@
 
 import { Outlet } from "react-router";
 import type { Route } from "./+types/layout";
+import { WorkflowFieldsHost } from "@/components/dropdowns/state/workflow-fields-host";
 import { PreloadResources } from "./layout.preload";
 
 export const meta: Route.MetaFunction = () => [
@@ -18,6 +19,7 @@ export default function AppLayout() {
     <>
       <PreloadResources />
       <Outlet />
+      <WorkflowFieldsHost />
     </>
   );
 }

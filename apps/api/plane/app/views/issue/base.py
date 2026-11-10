@@ -2,6 +2,8 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # See the LICENSE file for details.
 
+from plane.services.workflow.tasks import enqueue_after_commit
+
 # Python imports
 import copy
 import json
@@ -162,7 +164,8 @@ class IssueListEndpoint(BaseAPIView):
         # issue queryset
         issue_queryset = issue_queryset_grouper(queryset=issue_queryset, group_by=group_by, sub_group_by=sub_group_by)
 
-        recent_visited_task.delay(
+        enqueue_after_commit(
+            recent_visited_task,
             slug=slug,
             project_id=project_id,
             entity_name="project",
@@ -301,7 +304,8 @@ class IssueViewSet(BaseViewSet):
         # issue queryset
         issue_queryset = issue_queryset_grouper(queryset=issue_queryset, group_by=group_by, sub_group_by=sub_group_by)
 
-        recent_visited_task.delay(
+        enqueue_after_commit(
+            recent_visited_task,
             slug=slug,
             project_id=project_id,
             entity_name="project",
@@ -419,7 +423,8 @@ class IssueViewSet(BaseViewSet):
             serializer.save()
 
             # Track the issue
-            issue_activity.delay(
+            enqueue_after_commit(
+                issue_activity,
                 type="issue.activity.created",
                 requested_data=json.dumps(self.request.data, cls=DjangoJSONEncoder),
                 actor_id=str(request.user.id),
@@ -471,7 +476,8 @@ class IssueViewSet(BaseViewSet):
             datetime_fields = ["created_at", "updated_at"]
             issue = user_timezone_converter(issue, datetime_fields, request.user.user_timezone)
             # Send the model activity
-            model_activity.delay(
+            enqueue_after_commit(
+                model_activity,
                 model_name="issue",
                 model_id=str(serializer.data["id"]),
                 requested_data=request.data,
@@ -481,7 +487,8 @@ class IssueViewSet(BaseViewSet):
                 origin=base_host(request=request, is_app=True),
             )
             # updated issue description version
-            issue_description_version_task.delay(
+            enqueue_after_commit(
+                issue_description_version_task,
                 updated_issue=json.dumps(request.data, cls=DjangoJSONEncoder),
                 issue_id=str(serializer.data["id"]),
                 user_id=request.user.id,
@@ -495,7 +502,7 @@ class IssueViewSet(BaseViewSet):
         project = Project.objects.get(pk=project_id, workspace__slug=slug)
 
         issue = (
-            Issue.objects.filter(
+            Issue.formal_objects.filter(
                 project_id=self.kwargs.get("project_id"),
                 workspace__slug=self.kwargs.get("slug"),
                 pk=pk,
@@ -614,7 +621,8 @@ class IssueViewSet(BaseViewSet):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-        recent_visited_task.delay(
+        enqueue_after_commit(
+            recent_visited_task,
             slug=slug,
             entity_name="issue",
             entity_identifier=pk,
@@ -686,7 +694,8 @@ class IssueViewSet(BaseViewSet):
             is_migration_description_update = skip_activity and is_description_update
             # Log all the updates
             if not is_migration_description_update:
-                issue_activity.delay(
+                enqueue_after_commit(
+                    issue_activity,
                     type="issue.activity.updated",
                     requested_data=json.dumps(accepted_data, cls=DjangoJSONEncoder),
                     actor_id=str(request.user.id),
@@ -697,7 +706,8 @@ class IssueViewSet(BaseViewSet):
                     notification=True,
                     origin=base_host(request=request, is_app=True),
                 )
-                model_activity.delay(
+                enqueue_after_commit(
+                    model_activity,
                     model_name="issue",
                     model_id=str(serializer.data.get("id", None)),
                     requested_data=accepted_data,
@@ -707,7 +717,8 @@ class IssueViewSet(BaseViewSet):
                     origin=base_host(request=request, is_app=True),
                 )
                 # updated issue description version
-                issue_description_version_task.delay(
+                enqueue_after_commit(
+                    issue_description_version_task,
                     updated_issue=current_instance,
                     issue_id=str(serializer.data.get("id", None)),
                     user_id=request.user.id,
@@ -717,7 +728,7 @@ class IssueViewSet(BaseViewSet):
 
     @allow_permission([ROLE.ADMIN], creator=True, model=Issue)
     def destroy(self, request, slug, project_id, pk=None):
-        issue = Issue.objects.get(workspace__slug=slug, project_id=project_id, pk=pk)
+        issue = Issue.formal_objects.get(workspace__slug=slug, project_id=project_id, pk=pk)
 
         issue.delete()
         # delete the issue from recent visits
@@ -727,7 +738,8 @@ class IssueViewSet(BaseViewSet):
             entity_identifier=pk,
             entity_name="issue",
         ).delete(soft=False)
-        issue_activity.delay(
+        enqueue_after_commit(
+            issue_activity,
             type="issue.activity.deleted",
             requested_data=json.dumps({"issue_id": str(pk)}),
             actor_id=str(request.user.id),
@@ -746,21 +758,11 @@ class ProjectUserDisplayPropertyEndpoint(BaseAPIView):
     @allow_permission([ROLE.ADMIN, ROLE.MEMBER, ROLE.GUEST])
     def patch(self, request, slug, project_id):
         try:
-            issue_property = ProjectUserProperty.objects.get(
-                user=request.user, 
-                project_id=project_id
-            )
+            issue_property = ProjectUserProperty.objects.get(user=request.user, project_id=project_id)
         except ProjectUserProperty.DoesNotExist:
-            issue_property = ProjectUserProperty.objects.create(
-                user=request.user, 
-                project_id=project_id
-            )
+            issue_property = ProjectUserProperty.objects.create(user=request.user, project_id=project_id)
 
-        serializer = ProjectUserPropertySerializer(
-            issue_property, 
-            data=request.data,
-            partial=True
-        )
+        serializer = ProjectUserPropertySerializer(issue_property, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         serializer.save()
         return Response(serializer.data, status=status.HTTP_200_OK)
@@ -1067,14 +1069,18 @@ class IssueDetailEndpoint(BaseAPIView):
                 issue = issue.prefetch_related(
                     Prefetch(
                         "issue_relation",
-                        queryset=IssueRelation.objects.select_related("related_issue"),
+                        queryset=IssueRelation.objects.filter(
+                            related_issue_id__in=Issue.formal_objects.values("id")
+                        ).select_related("related_issue"),
                     )
                 )
             if "issue_related" in self.expand:
                 issue = issue.prefetch_related(
                     Prefetch(
                         "issue_related",
-                        queryset=IssueRelation.objects.select_related("issue"),
+                        queryset=IssueRelation.objects.filter(
+                            issue_id__in=Issue.formal_objects.values("id")
+                        ).select_related("issue"),
                     )
                 )
 
@@ -1128,12 +1134,16 @@ class IssueBulkUpdateDateEndpoint(BaseAPIView):
     @allow_permission([ROLE.ADMIN, ROLE.MEMBER])
     def post(self, request, slug, project_id):
         updates = request.data.get("updates", [])
+        from plane.services.workflow.batch import controlled_batch_dates
+
+        if controlled_batch_dates(project_id, request.user, updates):
+            return Response({"message": "Issues updated successfully"}, status=status.HTTP_200_OK)
 
         issue_ids = [update["id"] for update in updates]
         epoch = int(timezone.now().timestamp())
 
         # Fetch all relevant issues in a single query
-        issues = list(Issue.objects.filter(id__in=issue_ids, workspace__slug=slug, project_id=project_id))
+        issues = list(Issue.formal_objects.filter(id__in=issue_ids, workspace__slug=slug, project_id=project_id))
         issues_dict = {str(issue.id): issue for issue in issues}
         issues_to_update = []
 
@@ -1154,7 +1164,8 @@ class IssueBulkUpdateDateEndpoint(BaseAPIView):
                 )
 
             if start_date:
-                issue_activity.delay(
+                enqueue_after_commit(
+                    issue_activity,
                     type="issue.activity.updated",
                     requested_data=json.dumps({"start_date": update.get("start_date")}),
                     current_instance=json.dumps({"start_date": str(issue.start_date)}),
@@ -1167,7 +1178,8 @@ class IssueBulkUpdateDateEndpoint(BaseAPIView):
                 issues_to_update.append(issue)
 
             if target_date:
-                issue_activity.delay(
+                enqueue_after_commit(
+                    issue_activity,
                     type="issue.activity.updated",
                     requested_data=json.dumps({"target_date": update.get("target_date")}),
                     current_instance=json.dumps({"target_date": str(issue.target_date)}),
@@ -1180,7 +1192,7 @@ class IssueBulkUpdateDateEndpoint(BaseAPIView):
                 issues_to_update.append(issue)
 
         # Bulk update issues
-        Issue.objects.bulk_update(issues_to_update, ["start_date", "target_date"])
+        Issue.formal_objects.bulk_update(issues_to_update, ["start_date", "target_date"])
 
         return Response({"message": "Issues updated successfully"}, status=status.HTTP_200_OK)
 
@@ -1233,7 +1245,7 @@ class IssueDetailIdentifierEndpoint(BaseAPIView):
 
         # Fetch the issue
         issue = (
-            Issue.objects.filter(project_id=project.id)
+            Issue.formal_objects.filter(project_id=project.id)
             .filter(workspace__slug=slug)
             .select_related("workspace", "project", "state", "parent")
             .prefetch_related("assignees", "labels", "issue_module__module")
@@ -1356,7 +1368,8 @@ class IssueDetailIdentifierEndpoint(BaseAPIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-        recent_visited_task.delay(
+        enqueue_after_commit(
+            recent_visited_task,
             slug=slug,
             entity_name="issue",
             entity_identifier=str(issue.id),

@@ -80,7 +80,7 @@ class TestIssueNotificationContract:
         """Helper to build the work item detail endpoint URL."""
         return f"/api/v1/workspaces/{workspace_slug}/projects/{project_id}/issues/{issue_id}/"
 
-    @pytest.mark.django_db
+    @pytest.mark.django_db(transaction=True)
     def test_create_issue_triggers_notification(self, api_key_client, workspace, project):
         """Creating a work item via the external API dispatches a notifying activity."""
         url = self.get_list_url(workspace.slug, project.id)
@@ -96,7 +96,7 @@ class TestIssueNotificationContract:
         assert kwargs["type"] == "issue.activity.created"
         assert kwargs["notification"] is True
 
-    @pytest.mark.django_db
+    @pytest.mark.django_db(transaction=True)
     def test_update_issue_triggers_notification(self, api_key_client, workspace, project, create_issue):
         """Updating a work item via the external API dispatches a notifying activity."""
         url = self.get_detail_url(workspace.slug, project.id, create_issue.id)
@@ -113,7 +113,7 @@ class TestIssueNotificationContract:
         assert kwargs["type"] == "issue.activity.updated"
         assert kwargs["notification"] is True
 
-    @pytest.mark.django_db
+    @pytest.mark.django_db(transaction=True)
     def test_assign_issue_triggers_notification(self, api_key_client, workspace, project, create_issue, assignee_user):
         """Assigning a work item via the external API dispatches a notifying activity."""
         ProjectMember.objects.create(

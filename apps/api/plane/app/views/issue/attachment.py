@@ -46,7 +46,7 @@ class IssueAttachmentEndpoint(BaseAPIView):
         serializer = IssueAttachmentSerializer(data=request.data)
         workspace = Workspace.objects.get(slug=slug)
         # The URL issue must belong to the URL workspace + project (404 otherwise).
-        Issue.objects.get(pk=issue_id, workspace=workspace, project_id=project_id)
+        Issue.formal_objects.get(pk=issue_id, workspace=workspace, project_id=project_id)
         if serializer.is_valid():
             serializer.save(
                 project_id=project_id,
@@ -140,7 +140,7 @@ class IssueAttachmentV2Endpoint(BaseAPIView):
         workspace = Workspace.objects.get(slug=slug)
 
         # The URL issue must belong to the URL workspace + project (404 otherwise).
-        Issue.objects.get(pk=issue_id, workspace=workspace, project_id=project_id)
+        Issue.formal_objects.get(pk=issue_id, workspace=workspace, project_id=project_id)
 
         # asset key
         asset_key = f"{workspace.id}/{uuid.uuid4().hex}-{name}"
@@ -179,9 +179,7 @@ class IssueAttachmentV2Endpoint(BaseAPIView):
 
     @allow_permission([ROLE.ADMIN], creator=True, model=FileAsset)
     def delete(self, request, slug, project_id, issue_id, pk):
-        issue_attachment = FileAsset.objects.get(
-            pk=pk, workspace__slug=slug, project_id=project_id, issue_id=issue_id
-        )
+        issue_attachment = FileAsset.objects.get(pk=pk, workspace__slug=slug, project_id=project_id, issue_id=issue_id)
         issue_attachment.is_deleted = True
         issue_attachment.deleted_at = timezone.now()
         issue_attachment.save()
@@ -249,9 +247,7 @@ class IssueAttachmentV2Endpoint(BaseAPIView):
                 {"error": "You are not allowed to view this issue"},
                 status=status.HTTP_403_FORBIDDEN,
             )
-        issue_attachment = FileAsset.objects.get(
-            pk=pk, workspace__slug=slug, project_id=project_id, issue_id=issue_id
-        )
+        issue_attachment = FileAsset.objects.get(pk=pk, workspace__slug=slug, project_id=project_id, issue_id=issue_id)
         serializer = IssueAttachmentSerializer(issue_attachment)
 
         # Send this activity only if the attachment is not uploaded before

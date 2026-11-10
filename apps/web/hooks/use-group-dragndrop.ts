@@ -4,6 +4,10 @@
  * See the LICENSE file for details.
  */
 
+import { useTranslation } from "@plane/i18n";
+import { workflowService } from "@/services/workflow.service";
+import { requestWorkflowFields } from "@/components/dropdowns/state/workflow-fields-host";
+import { useProjectState } from "./store/use-project-state";
 import { useParams } from "next/navigation";
 import { setToast } from "@plane/blocks/toast";
 import type { SetToastProps } from "@plane/blocks/toast";
@@ -35,6 +39,8 @@ export const useGroupIssuesDragNDrop = (
   subGroupBy?: TIssueGroupByOptions
 ) => {
   const { workspaceSlug } = useParams();
+  const { t } = useTranslation();
+  const { getStateById } = useProjectState();
 
   const {
     issue: { getIssueById },
@@ -60,8 +66,36 @@ export const useGroupIssuesDragNDrop = (
         ADD: string[];
         REMOVE: string[];
       };
+    },
+    confirmed = false
+  ): Promise<void> => {
+    if (data.state_id && data.state_id !== getIssueById(issueId)?.state_id && workspaceSlug) {
+      const rules = await workflowService.preview(String(workspaceSlug), projectId, issueId, data);
+      if (rules.enabled) {
+        const target = rules.targets?.find((item) => item.state_id === data.state_id);
+        const repairable = [
+          "WORKFLOW_REQUIRED_FIELDS_MISSING",
+          "WORKFLOW_INVALID_ASSIGNEE",
+          "WORKFLOW_INVALID_DATE",
+        ].includes(target?.reason?.code ?? "");
+        const emptyRequirement =
+          rules.branch === "requirement" &&
+          rules.descendant_count === 0 &&
+          getStateById(data.state_id)?.group === "completed";
+        if (!confirmed && (repairable || emptyRequirement)) {
+          await requestWorkflowFields({
+            projectId,
+            initial: { ...getIssueById(issueId), ...data },
+            emptyRequirement,
+            save: async (fields) => updateIssueOnDrop(projectId, issueId, { ...data, ...fields }, issueUpdates, true),
+          });
+          return;
+        }
+        if (data.state_id !== getIssueById(issueId)?.state_id && (!target || !target.allowed)) {
+          throw target?.reason ?? { message: t("project_settings.workflow.save_error") };
+        }
+      }
     }
-  ) => {
     const errorToastProps: SetToastProps = {
       type: "error",
       title: "Error!",
@@ -95,7 +129,7 @@ export const useGroupIssuesDragNDrop = (
       delete data[moduleKey];
     }
 
-    updateIssue && updateIssue(projectId, issueId, data).catch(() => setToast(errorToastProps));
+    if (updateIssue) await updateIssue(projectId, issueId, data);
   };
 
   const handleOnDrop = async (source: GroupDropLocation, destination: GroupDropLocation) => {
@@ -120,7 +154,7 @@ export const useGroupIssuesDragNDrop = (
       setToast({
         title: "Error!",
         type: "error",
-        message: err?.detail ?? "Failed to perform this action",
+        message: err?.message ?? err?.detail ?? "Failed to perform this action",
       });
     });
   };

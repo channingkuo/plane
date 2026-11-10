@@ -2,6 +2,8 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # See the LICENSE file for details.
 
+from plane.services.workflow.tasks import enqueue_after_commit
+
 # Python imports
 import copy
 import json
@@ -96,7 +98,7 @@ class IssueArchiveViewSet(BaseViewSet):
 
     def get_queryset(self):
         return (
-            Issue.objects.filter(Q(type__isnull=True) | Q(type__is_epic=False))
+            Issue.formal_objects.filter(Q(type__isnull=True) | Q(type__is_epic=False))
             .filter(archived_at__isnull=False)
             .filter(project_id=self.kwargs.get("project_id"))
             .filter(workspace__slug=self.kwargs.get("slug"))
@@ -261,7 +263,8 @@ class IssueArchiveViewSet(BaseViewSet):
                 {"error": "Can only archive completed or cancelled state group issue"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        issue_activity.delay(
+        enqueue_after_commit(
+            issue_activity,
             type="issue.activity.updated",
             requested_data=json.dumps({"archived_at": str(timezone.now().date()), "automation": False}),
             actor_id=str(request.user.id),
@@ -279,13 +282,14 @@ class IssueArchiveViewSet(BaseViewSet):
 
     @allow_permission([ROLE.ADMIN, ROLE.MEMBER])
     def unarchive(self, request, slug, project_id, pk=None):
-        issue = Issue.objects.get(
+        issue = Issue.formal_objects.get(
             workspace__slug=slug,
             project_id=project_id,
             archived_at__isnull=False,
             pk=pk,
         )
-        issue_activity.delay(
+        enqueue_after_commit(
+            issue_activity,
             type="issue.activity.updated",
             requested_data=json.dumps({"archived_at": None}),
             actor_id=str(request.user.id),
@@ -312,9 +316,9 @@ class BulkArchiveIssuesEndpoint(BaseAPIView):
         if not len(issue_ids):
             return Response({"error": "Issue IDs are required"}, status=status.HTTP_400_BAD_REQUEST)
 
-        issues = Issue.objects.filter(workspace__slug=slug, project_id=project_id, pk__in=issue_ids).select_related(
-            "state"
-        )
+        issues = Issue.formal_objects.filter(
+            workspace__slug=slug, project_id=project_id, pk__in=issue_ids
+        ).select_related("state")
         bulk_archive_issues = []
         for issue in issues:
             if issue.state.group not in ["completed", "cancelled"]:
@@ -325,7 +329,8 @@ class BulkArchiveIssuesEndpoint(BaseAPIView):
                     },
                     status=status.HTTP_400_BAD_REQUEST,
                 )
-            issue_activity.delay(
+            enqueue_after_commit(
+                issue_activity,
                 type="issue.activity.updated",
                 requested_data=json.dumps({"archived_at": str(timezone.now().date()), "automation": False}),
                 actor_id=str(request.user.id),
@@ -338,6 +343,6 @@ class BulkArchiveIssuesEndpoint(BaseAPIView):
             )
             issue.archived_at = timezone.now().date()
             bulk_archive_issues.append(issue)
-        Issue.objects.bulk_update(bulk_archive_issues, ["archived_at"])
+        Issue.formal_objects.bulk_update(bulk_archive_issues, ["archived_at"])
 
         return Response({"archived_at": str(timezone.now().date())}, status=status.HTTP_200_OK)

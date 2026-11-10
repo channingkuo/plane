@@ -5,6 +5,7 @@
  */
 
 import { observer } from "mobx-react";
+import { WorkflowStatus } from "./workflow-status";
 // plane imports
 import { DueDateOutline, StartDateOutline } from "@makeplane/propel/icons";
 import { DateSelect } from "@plane/blocks/property-select";
@@ -56,9 +57,13 @@ export const IssueDetailMetaRow = observer(function IssueDetailMetaRow(props: Pr
 
   return (
     <div className="-ml-3">
+      <WorkflowStatus workspaceSlug={workspaceSlug} projectId={projectId} issueId={issueId} />
       <div className="flex w-full flex-wrap items-center gap-y-2 rounded-lg py-0.5 [&>*:not([data-divider])]:min-w-24 [&>*:not([data-divider])]:flex-1">
         <div className="flex w-full items-center px-1">
           <StateSelect
+            issueId={issue.id}
+            issueValues={issue}
+            onWorkflowChange={(patch) => issueOperations.update(workspaceSlug, projectId, issueId, patch)}
             testId="work-item-state-select"
             value={issue.state_id}
             onChange={(val) => issueOperations.update(workspaceSlug, projectId, issueId, { state_id: val })}

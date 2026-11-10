@@ -10,6 +10,7 @@ import { useParams } from "react-router";
 // plane imports
 import { List } from "@makeplane/propel/components/list";
 import {
+  EUserPermissions,
   EUserPermissionsLevel,
   GROUPED_PROJECT_SETTINGS,
   PROJECT_SETTINGS_CATEGORIES,
@@ -45,7 +46,9 @@ export const ProjectSettingsSidebarItemCategories = observer(function ProjectSet
       {PROJECT_SETTINGS_CATEGORIES.map((category) => {
         const categoryItems = GROUPED_PROJECT_SETTINGS[category];
         const accessibleItems = categoryItems.filter((item) =>
-          allowPermissions(item.access, EUserPermissionsLevel.PROJECT, workspaceSlug, projectId)
+          item.key === "workflow"
+            ? allowPermissions([EUserPermissions.ADMIN], EUserPermissionsLevel.WORKSPACE, workspaceSlug)
+            : allowPermissions(item.access, EUserPermissionsLevel.PROJECT, workspaceSlug, projectId)
         );
 
         if (accessibleItems.length === 0) return null;

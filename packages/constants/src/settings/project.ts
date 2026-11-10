@@ -30,6 +30,13 @@ export const PROJECT_SETTINGS_CATEGORY_LABELS: Record<PROJECT_SETTINGS_CATEGORY,
 };
 
 export const PROJECT_SETTINGS: Record<TProjectSettingsTabs, TProjectSettingsItem> = {
+  workflow: {
+    key: "workflow",
+    i18n_label: "project_settings.workflow.heading",
+    href: "/workflow",
+    access: [EUserProjectRoles.ADMIN],
+    highlight: (pathname, baseUrl) => pathname === `${baseUrl}/workflow/`,
+  },
   general: {
     key: "general",
     i18n_label: "common.general",
@@ -125,5 +132,5 @@ export const GROUPED_PROJECT_SETTINGS: Record<PROJECT_SETTINGS_CATEGORY, TProjec
     PROJECT_SETTINGS["labels"],
     PROJECT_SETTINGS["estimates"],
   ],
-  [PROJECT_SETTINGS_CATEGORY.EXECUTION]: [PROJECT_SETTINGS["automations"]],
+  [PROJECT_SETTINGS_CATEGORY.EXECUTION]: [PROJECT_SETTINGS["workflow"], PROJECT_SETTINGS["automations"]],
 };

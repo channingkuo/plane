@@ -2,6 +2,8 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # See the LICENSE file for details.
 
+from plane.services.workflow.tasks import enqueue_after_commit
+
 # Python imports
 import json
 
@@ -284,7 +286,8 @@ class WorkspaceDraftIssueViewSet(BaseViewSet):
         if serializer.is_valid():
             serializer.save()
 
-            issue_activity.delay(
+            enqueue_after_commit(
+                issue_activity,
                 type="issue.activity.created",
                 requested_data=json.dumps(self.request.data, cls=DjangoJSONEncoder),
                 actor_id=str(request.user.id),
@@ -306,7 +309,8 @@ class WorkspaceDraftIssueViewSet(BaseViewSet):
                     updated_by_id=draft_issue.updated_by_id,
                 )
                 # Capture Issue Activity
-                issue_activity.delay(
+                enqueue_after_commit(
+                    issue_activity,
                     type="cycle.activity.created",
                     requested_data=None,
                     actor_id=str(self.request.user.id),
@@ -341,7 +345,8 @@ class WorkspaceDraftIssueViewSet(BaseViewSet):
                 )
                 # Update the activity
                 _ = [
-                    issue_activity.delay(
+                    enqueue_after_commit(
+                        issue_activity,
                         type="module.activity.created",
                         requested_data=json.dumps({"module_id": str(module)}),
                         actor_id=str(request.user.id),

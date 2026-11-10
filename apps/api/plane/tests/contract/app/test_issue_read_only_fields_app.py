@@ -29,7 +29,9 @@ READ_ONLY_FIELDS = [
 @pytest.mark.contract
 @pytest.mark.django_db
 @pytest.mark.parametrize("field, value", READ_ONLY_FIELDS)
-def test_partial_update_does_not_set_read_only_field(workspace, create_user, field, value):
+def test_partial_update_does_not_set_read_only_field(
+    workspace, create_user, field, value, django_capture_on_commit_callbacks
+):
     member = UserFactory()
     WorkspaceMember.objects.create(workspace=workspace, member=member, role=15)
     project = Project.objects.create(name="P", identifier="P", workspace=workspace, created_by=create_user)
@@ -44,6 +46,8 @@ def test_partial_update_does_not_set_read_only_field(workspace, create_user, fie
     with (
         mock.patch("plane.app.views.issue.base.issue_activity") as issue_activity,
         mock.patch("plane.app.views.issue.base.model_activity") as model_activity,
+        mock.patch("plane.app.views.issue.base.issue_description_version_task"),
+        django_capture_on_commit_callbacks(execute=True),
     ):
         response = client.patch(
             f"/api/workspaces/{workspace.slug}/projects/{project.id}/issues/{issue.id}/",

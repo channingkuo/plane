@@ -27,7 +27,7 @@ READ_ONLY_FIELDS = [
 
 
 @pytest.mark.contract
-@pytest.mark.django_db
+@pytest.mark.django_db(transaction=True)
 @pytest.mark.parametrize("field, value", READ_ONLY_FIELDS)
 def test_patch_does_not_set_read_only_field(workspace, create_user, field, value):
     member = UserFactory()

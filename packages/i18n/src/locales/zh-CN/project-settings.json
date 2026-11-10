@@ -527,6 +527,48 @@
           }
         }
       }
+    },
+    "workflow": {
+      "heading": "工作流",
+      "description": "配置项目状态、流转路径、角色及必填字段。状态分组由状态设置页面维护。",
+      "loading": "正在加载工作流…",
+      "load_error": "无法加载工作流，或没有访问权限。",
+      "enabled": "启用工作流",
+      "task_initial_state_id": "任务初始状态",
+      "intake_submission_state_id": "Intake 提交状态",
+      "intake_acceptance_state_id": "Intake 接收状态",
+      "requirement_completed_state_id": "父需求完成状态",
+      "requirement_reopen_state_id": "父需求退回状态",
+      "system_paths": "仅项目管理员可接收 Intake 提交。全部后代完成且字段齐全后，需求自动完成；后代重新打开时，需求自动退回。",
+      "task": "任务",
+      "requirement": "需求",
+      "required_paths": "补齐父需求必需的管理员路径",
+      "transitions": "流转规则",
+      "from": "原状态",
+      "to": "目标状态",
+      "role_20": "管理员",
+      "role_15": "成员",
+      "role_5": "访客",
+      "remove": "移除",
+      "add_transition": "添加流转",
+      "requirements": "各目标状态的必填字段",
+      "assignees": "负责人",
+      "start_date": "开始日期",
+      "target_date": "截止日期",
+      "validate": "验证配置",
+      "save": "保存配置",
+      "valid": "配置验证通过。",
+      "saved": "工作流配置已保存。",
+      "save_error": "无法保存，请检查状态、路径及必填字段。",
+      "conflict": "另一位管理员已更新配置。当前输入已保留；请加载最新配置后重试。",
+      "reload": "放弃当前输入并加载最新配置",
+      "complete_fields": "补齐流转字段",
+      "empty_confirmation": "该需求尚无子工作项，确认直接完成？",
+      "apply_transition": "提交流转",
+      "cancel": "取消",
+      "required": "必填",
+      "progress": "需求执行进度",
+      "blocked": "自动完成受阻，请补齐所需字段。"
     }
   }
 }

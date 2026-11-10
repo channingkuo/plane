@@ -32,9 +32,13 @@ function ProjectDetailSettingsLayout({ params }: Route.ComponentProps) {
           <div className="hidden h-full shrink-0 md:block">
             <ProjectSettingsSidebarRoot projectId={projectId} />
           </div>
-          <ProjectAuthWrapper workspaceSlug={workspaceSlug} projectId={projectId}>
+          {/\/workflow\/?$/.test(pathname) ? (
             <Outlet />
-          </ProjectAuthWrapper>
+          ) : (
+            <ProjectAuthWrapper workspaceSlug={workspaceSlug} projectId={projectId}>
+              <Outlet />
+            </ProjectAuthWrapper>
+          )}
         </div>
       </div>
     </>
