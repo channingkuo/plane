@@ -114,6 +114,9 @@ jobs:
     permissions:
       contents: write
     needs: [validate, build]
+    concurrency:
+      group: server-release-${{ github.repository }}-${{ needs.validate.outputs.image_tag }}
+      cancel-in-progress: false
     runs-on: ${{ inputs.architecture == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
     timeout-minutes: 30
     steps:
@@ -150,28 +153,17 @@ jobs:
           compression-level: 0
           retention-days: 7
           if-no-files-found: error
-      - name: Prepare release version
-        id: version
+      - name: Replace the version's offline GitHub Release
+        id: github-release
         env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PLANE_VERSION: ${{ needs.validate.outputs.image_tag }}
         run: |
-          echo "tag=server-$BUILD_ARCH-$PLANE_VERSION-${GITHUB_SHA:0:12}" >> "$GITHUB_OUTPUT"
-          echo "name=$PLANE_VERSION" >> "$GITHUB_OUTPUT"
-      - name: Publish offline package to GitHub Release
-        id: github-release
-        uses: softprops/action-gh-release@v2.6.1
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          tag_name: ${{ steps.version.outputs.tag }}
-          name: ${{ steps.version.outputs.name }}
-          target_commitish: ${{ github.sha }}
-          body_path: ${{ runner.temp }}/release/RELEASE_NOTES.md
-          prerelease: true
-          make_latest: false
-          fail_on_unmatched_files: true
-          files: |
-            ${{ runner.temp }}/release/*.tar.gz
-            ${{ runner.temp }}/release/SHA256SUMS
+          release_url="$(python3 deployments/server/release.py \
+            --repository "$GITHUB_REPOSITORY" --version "$PLANE_VERSION" \
+            --sha "$GITHUB_SHA" --arch "$BUILD_ARCH" \
+            --directory "$RUNNER_TEMP/release")"
+          echo "url=$release_url" >> "$GITHUB_OUTPUT"
       - name: Show download and deployment instructions
         env:
           ARTIFACT_URL: ${{ steps.release.outputs.artifact-url }}
@@ -188,7 +180,7 @@ jobs:
             echo 'The archive includes all application and infrastructure images; no registry login or server-side build is needed.'
             echo 'Download the .tar.gz and SHA256SUMS from the GitHub Release assets:'
             echo '```bash'
-            echo 'sha256sum --check SHA256SUMS'
+            echo 'sha256sum --check --ignore-missing SHA256SUMS'
             echo 'tar -xzf plane-server-linux-*.tar.gz'
             echo 'cd plane-server'
             echo './deploy.sh init https://plane.example.com'

@@ -117,7 +117,7 @@ if 'run' in sys.argv and 'migrator' in sys.argv and os.environ.get('FAIL_MIGRATI
         self.assertIn(f"plane-server-linux-amd64-{VERSION}.tar.gz", notes)
         self.assertIn(f"应用镜像版本：`{VERSION}`", notes)
         for instruction in (
-            "sha256sum --check SHA256SUMS",
+            "sha256sum --check --ignore-missing SHA256SUMS",
             "./deploy.sh init",
             "./deploy.sh up",
             "## 升级和已有数据",

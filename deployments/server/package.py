@@ -108,6 +108,14 @@ def package(images_dir, output_dir, sha, arch, repository, run_id):
         f"- 下载本 Release 的 **`{archive.name}`** 和 **`SHA256SUMS`**。\n\n"
         "包含 Web、Space、Admin、Live、API/Worker、代理及 PostgreSQL、Valkey、RabbitMQ、Silo 镜像。"
         "不需要服务器现场编译或登录镜像仓库。\n\n"
+        "同版本的后续成功构建会覆盖本 Release 的同名附件，并更新这里的源代码提交和构建记录。"
+        "下载时请选择服务器对应架构；其他架构的附件会保留。\n\n"
+        "## 项目工作流功能\n\n"
+        "- 待评审收集项同时出现在工作项对应状态列。\n"
+        "- 看板卡片顶部 ID 支持完整父级路径，祖先可点击，当前项字号较小。\n"
+        "- 配置测试任务初始状态及触发路径后，完成开发自动生成测试子任务。\n"
+        "- 项目成员默认查看本人负责项及全部待评审、已评审项，可切换全量。\n"
+        "- 项目总览包含状态汇总和全项目工作项时间线。\n\n"
         f"## 首次部署{deployment}"
     )
     (output_dir / "RELEASE_NOTES.md").write_text(notes)

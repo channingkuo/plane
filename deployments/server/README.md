@@ -6,7 +6,9 @@
 
 在本仓库的 **Releases** 中打开对应的版本，例如 `v1.5.0-XMW`，从 Assets 下载 `plane-server-linux-amd64-v1.5.0-XMW.tar.gz` 和 `SHA256SUMS`。Release 标题只使用版本号，CPU 架构见附件名称和 Release Notes；Release Notes 包含完整部署、HTTPS、维护和升级说明。
 
-构建成功后自动发布预发布版本，Release 标签格式为 `server-<architecture>-<version>-XMW-<short-commit>`。短提交号仅用于区分同一版本的多次构建；应用镜像标签使用真实版本号加 `-XMW`，不使用提交哈希。
+每个版本只保留一个预发布 Release，固定标签为 `server-<version>-XMW`，例如 `server-v1.5.0-XMW`。同版本再次构建成功后，覆盖对应架构的同名附件、更新说明和源代码提交，下载地址保持不变。其他架构的最新附件会保留在同一个 Release 中，`SHA256SUMS` 覆盖当前可下载的所有架构。
+
+发布完成后自动删除该版本旧的、带架构或提交后缀的重复 Release；其他版本和普通 Git 标签保留。只有新附件上传并验证成功后才清理旧 Release；构建失败不修改既有 Release，发布失败不清理旧的重复 Release。应用镜像标签仍使用真实版本号加 `-XMW`；本次构建的确切代码见 Release Notes 和包内 `BUILD_INFO.json`。
 
 当前 `feature/workflow-rules` 分支代码更新会自动构建 amd64（普通 Intel/AMD 服务器）。手动运行可选择 `arm64`（ARM 服务器）；GitHub 的手动按钮需要工作流已存在于默认分支。两种架构使用对应原生 runner，不依赖模拟器。
 
@@ -19,7 +21,7 @@ Release 附件不受 Actions artifact 的 7 天保留期限制。Actions 页面�
 将本 Release 的 `.tar.gz` 和 `SHA256SUMS` 上传到服务器的同一目录，然后执行：
 
 ```bash
-sha256sum --check SHA256SUMS
+sha256sum --check --ignore-missing SHA256SUMS
 tar -xzf plane-server-linux-*.tar.gz
 cd plane-server
 
