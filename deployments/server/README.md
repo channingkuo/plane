@@ -4,9 +4,9 @@
 
 ## 获取构建包
 
-在本仓库的 **Releases** 中打开对应的 `Plane server <commit> (linux/amd64)`，从 Assets 下载 `plane-server-linux-amd64-<commit>.tar.gz` 和 `SHA256SUMS`。Release Notes 包含完整部署、HTTPS、维护和升级说明。
+在本仓库的 **Releases** 中打开对应的 `Plane server <version>-XMW (linux/amd64)`，例如 `Plane server v1.5.0-XMW (linux/amd64)`，从 Assets 下载 `plane-server-linux-amd64-v1.5.0-XMW.tar.gz` 和 `SHA256SUMS`。Release Notes 包含完整部署、HTTPS、维护和升级说明。
 
-构建成功后自动发布预发布版本，标签格式为 `server-<architecture>-<commit>`，绑定本次构建提交，不覆盖其他正式版本。
+构建成功后自动发布预发布版本，Release 标签格式为 `server-<architecture>-<version>-XMW-<short-commit>`。短提交号仅用于区分同一版本的多次构建；应用镜像标签使用真实版本号加 `-XMW`，不使用提交哈希。
 
 当前 `feature/workflow-rules` 分支代码更新会自动构建 amd64（普通 Intel/AMD 服务器）。手动运行可选择 `arm64`（ARM 服务器）；GitHub 的手动按钮需要工作流已存在于默认分支。两种架构使用对应原生 runner，不依赖模拟器。
 
@@ -57,7 +57,45 @@ DEPLOY_WAIT_TIMEOUT=600 ./deploy.sh up
 
 端口及其他参数在 `.env` 中修改。只暴露代理的 HTTP/HTTPS 端口，数据库、缓存、队列和对象存储不直接映射到主机端口。Compose 项目名默认为 `plane`。
 
-`BUILD_INFO.json` 记录完整源代码提交、架构和 Actions 运行地址；`images.env` 固定全部应用的镜像标签。升级时使用同一提交编译的全部镜像，不混用上游 stable 前端或后端。
+`BUILD_INFO.json` 记录应用版本、完整源代码提交、架构和 Actions 运行地址；`images.env` 固定全部应用的镜像标签。升级时使用同一提交编译的全部镜像，不混用上游 stable 前端或后端。
+
+## 镜像名称和版本
+
+六个应用镜像的名称固定为 `plane-selfhost/admin`、`plane-selfhost/backend`、`plane-selfhost/live`、`plane-selfhost/proxy`、`plane-selfhost/space`、`plane-selfhost/web`。打包脚本读取仓库根目录 `package.json` 中的真实版本号，统一添加 `v` 前缀和 `-XMW` 后缀，例如：
+
+```text
+plane-selfhost/admin:v1.5.0-XMW
+plane-selfhost/backend:v1.5.0-XMW
+plane-selfhost/live:v1.5.0-XMW
+plane-selfhost/proxy:v1.5.0-XMW
+plane-selfhost/space:v1.5.0-XMW
+plane-selfhost/web:v1.5.0-XMW
+```
+
+当源码版本更新为 `1.5.1`、`1.5.2` 时，下一次构建会自动使用 `v1.5.1-XMW`、`v1.5.2-XMW`，无需手工修改六个镜像标签。仅修改代码而未升级源码版本时，重建仍使用相同标签；`docker load` 会更新本机该标签指向的镜像，通过 `BUILD_INFO.json` 和校验和区分具体构建。需要保留历史构建时，请同时保留原离线包。
+
+`./deploy.sh up` 会按新包的 `images.env` 加载并启动这些镜像。旧包使用哈希标签，只有使用新构建的离线包后才会采用新标签；不要只修改旧包的 `images.env`，否则它与镜像归档内的标签不一致。
+
+### 服务器上哪些镜像需要保留
+
+| 镜像                                                                                                               | 此部署包是否需要 | 用途                                                            |
+| ------------------------------------------------------------------------------------------------------------------ | ---------------- | --------------------------------------------------------------- |
+| 六个 `plane-selfhost/*:<version>-XMW`                                                                              | 需要             | 当前应用服务；API、Worker、Beat 和迁移共用 backend 镜像         |
+| `makeplane/plane-admin`、`plane-backend`、`plane-frontend`、`plane-live`、`plane-proxy`、`plane-space` 的 `v1.4.3` | 不依赖           | 旧版官方应用镜像，不是此部署包的运行依赖                        |
+| `postgres:15.7-alpine`                                                                                             | 默认需要         | PostgreSQL 数据库                                               |
+| `valkey/valkey:7.2.11-alpine`                                                                                      | 默认需要         | 缓存及 Redis 兼容服务                                           |
+| `rabbitmq:3.13.6-management-alpine`                                                                                | 默认需要         | 后台任务消息队列                                                |
+| `pgsty/silo:RELEASE.2026-09-16T00-00-00Z`                                                                          | 默认需要         | S3 兼容对象存储，保存上传附件；Compose 服务仍名为 `plane-minio` |
+
+默认 Compose 会启动以上四种依赖服务。仅在已改好 Compose 及应用连接配置、实际使用外部服务时，才可能不再需要对应本地服务镜像。
+
+清理旧应用镜像前，先检查包括已停止容器在内的引用：
+
+```bash
+docker ps -a --format 'table {{.Names}}\t{{.Image}}'
+```
+
+确认没有容器依赖且无需保留它们回滚后，可以用 `docker image rm <完整镜像名:标签>` 删除旧的官方应用镜像或旧哈希标签。部署脚本不会自动清理旧镜像；不要使用强制删除或清理数据卷的命令。
 
 ## 升级和已有数据
 
