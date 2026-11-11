@@ -17,7 +17,7 @@ import { useTranslation } from "@plane/i18n";
 import type { IState, TPaginatedResponse } from "@plane/types";
 import type { TIssue, TIssueWorkflow } from "@plane/types";
 import { workflowService } from "@/services/workflow.service";
-import { WorkflowFieldsDialog } from "./workflow-dialog";
+import { requestWorkflowFields } from "./workflow-fields-host";
 // hooks
 import { useProjectState } from "@/hooks/store/use-project-state";
 
@@ -79,7 +79,6 @@ export const StateSelect = observer(function StateSelect(props: StateSelectWebPr
   } = props;
   const { issueId, issueValues, isForWorkItemCreation, isIntakeAcceptance, onWorkflowChange } = props;
   const [rules, setRules] = useState<TIssueWorkflow | null>(null);
-  const [pending, setPending] = useState<string | null>(null);
   const [problem, setProblem] = useState("");
   const [blockedChildren, setBlockedChildren] = useState<{ id: string; name: string }[]>([]);
   // router params
@@ -164,7 +163,19 @@ export const StateSelect = observer(function StateSelect(props: StateSelectWebPr
           emptyRequirement) &&
         onWorkflowChange
       ) {
-        setPending(stateId);
+        try {
+          // Keep the editor mounted while an optimistic update moves or unmounts this card.
+          await requestWorkflowFields({
+            projectId,
+            initial: issueValues ?? {},
+            emptyRequirement,
+            save: async (patch) => {
+              await onWorkflowChange({ ...patch, state_id: stateId });
+            },
+          });
+        } catch (failure) {
+          setProblem((failure as { message?: string }).message ?? t("project_settings.workflow.save_error"));
+        }
         return;
       }
       if (target && !target.allowed) {
@@ -214,17 +225,6 @@ export const StateSelect = observer(function StateSelect(props: StateSelectWebPr
           {t("project_settings.workflow.required")}:{" "}
           {requiredFields.map((field) => t(`project_settings.workflow.${field}`)).join(", ")}
         </span>
-      )}
-      {pending && projectId && (
-        <WorkflowFieldsDialog
-          projectId={projectId}
-          initial={issueValues ?? {}}
-          emptyRequirement={rules?.branch === "requirement" && rules.descendant_count === 0}
-          onSave={async (patch) => {
-            await onWorkflowChange?.({ ...patch, state_id: pending });
-          }}
-          onClose={() => setPending(null)}
-        />
       )}
     </>
   );

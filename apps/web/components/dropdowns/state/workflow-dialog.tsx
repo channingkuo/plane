@@ -12,6 +12,7 @@ import { useTranslation } from "@plane/i18n";
 import type { TIssue } from "@plane/types";
 import { getDate, renderFormattedPayloadDate } from "@plane/utils";
 import { MemberSelect } from "@/components/dropdowns/member/member-select";
+import { getWorkflowErrorMessage } from "@/services/workflow-errors";
 
 export function WorkflowFieldsDialog({
   projectId,
@@ -42,7 +43,7 @@ export function WorkflowFieldsDialog({
         if (!open) onClose();
       }}
     >
-      <DialogContent size="sm">
+      <DialogContent size="sm" onClick={(event) => event.stopPropagation()}>
         <div className="p-6">
           <DialogTitle>{label("complete_fields")}</DialogTitle>
           {emptyRequirement && <p>{label("empty_confirmation")}</p>}
@@ -50,13 +51,14 @@ export function WorkflowFieldsDialog({
             className="mt-4 flex flex-col gap-4"
             onSubmit={async (event) => {
               event.preventDefault();
+              event.stopPropagation();
               setBusy(true);
               setError("");
               try {
                 await onSave(values);
                 onClose();
               } catch (failure) {
-                setError((failure as { message?: string }).message ?? label("save_error"));
+                setError(getWorkflowErrorMessage(failure, t));
               } finally {
                 setBusy(false);
               }

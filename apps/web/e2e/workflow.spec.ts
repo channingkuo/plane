@@ -26,6 +26,55 @@ async function choose(page: Page, label: string, option: string, index = 0) {
   await page.getByRole("option", { name: option, exact: true }).click();
 }
 
+async function configureTaskFieldTransition(page: Page) {
+  const current = await (await page.request.get(api + projectPath + "workflow/")).json();
+  const response = await page.request.put(api + projectPath + "workflow/", {
+    data: {
+      ...current,
+      enabled: true,
+      task_initial_state_id: fixture.states.Ready,
+      intake_submission_state_id: fixture.states.Review,
+      intake_acceptance_state_id: fixture.states.Reviewed,
+      requirement_completed_state_id: fixture.states.Live,
+      requirement_reopen_state_id: fixture.states.Reviewed,
+      transitions: [
+        {
+          branch: "requirement",
+          from_state_id: fixture.states.Reviewed,
+          to_state_id: fixture.states.Live,
+          roles: [20],
+        },
+        {
+          branch: "requirement",
+          from_state_id: fixture.states.Live,
+          to_state_id: fixture.states.Reviewed,
+          roles: [20],
+        },
+        { branch: "task", from_state_id: fixture.states.Ready, to_state_id: fixture.states.Reviewed, roles: [20] },
+      ],
+      requirements: [
+        { branch: "task", state_id: fixture.states.Reviewed, fields: ["assignees", "start_date", "target_date"] },
+      ],
+    },
+  });
+  expect(response.ok(), await response.text()).toBeTruthy();
+}
+
+async function completeTransitionFields(page: Page) {
+  const dialog = page.getByRole("dialog", { name: "Complete transition fields", exact: true });
+  await dialog.getByTestId("workflow-assignees").click();
+  await page
+    .getByRole("option", { name: /workflow/i })
+    .first()
+    .click();
+  // Escape also dismisses the workflow dialog; close the member picker with an outside click.
+  await dialog.getByText("Complete transition fields", { exact: true }).click();
+  await dialog.getByTestId("workflow-start-date").click();
+  await page.getByRole("button", { name: /November 10(th)?, 2026/ }).click();
+  await dialog.getByTestId("workflow-due-date").click();
+  await page.getByRole("button", { name: /November 12(th)?, 2026/ }).click();
+}
+
 test.beforeEach(async ({ context, page }) => {
   await page.clock.setFixedTime(new Date("2026-11-10T12:00:00Z"));
   await context.addCookies([{ name: fixture.cookieName, value: fixture.cookie, domain: "127.0.0.1", path: "/" }]);
@@ -162,16 +211,7 @@ test("missing fields are completed in one transition submission", async ({ page 
   await page.getByRole("option", { name: "Live", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "Complete transition fields", exact: true });
   await expect(dialog).toBeVisible();
-  await dialog.getByTestId("workflow-assignees").click();
-  await page
-    .getByRole("option", { name: /workflow/i })
-    .first()
-    .click();
-  await page.keyboard.press("Escape");
-  await dialog.getByTestId("workflow-start-date").click();
-  await page.getByRole("button", { name: /November 10(th)?, 2026/ }).click();
-  await dialog.getByTestId("workflow-due-date").click();
-  await page.getByRole("button", { name: /November 12(th)?, 2026/ }).click();
+  await completeTransitionFields(page);
   await dialog.getByRole("button", { name: "Apply transition", exact: true }).click();
   await expect(dialog).not.toBeVisible();
   const actual = await (await page.request.get(api + projectPath + `issues/${childId}/`)).json();
@@ -254,24 +294,12 @@ test("a permission change while the selector is open rolls the optimistic state 
   );
 });
 
-test("kanban drag collects required fields before committing a transition", async ({ page }) => {
+test("kanban drag collects required fields without crypto.randomUUID", async ({ page }) => {
   test.setTimeout(120_000);
-  const config = await (await page.request.get(api + projectPath + "workflow/")).json();
-  expect(
-    (
-      await page.request.put(api + projectPath + "workflow/", {
-        data: {
-          ...config,
-          enabled: true,
-          transitions: [
-            ...config.transitions,
-            { branch: "task", from_state_id: fixture.states.Ready, to_state_id: fixture.states.Live, roles: [20] },
-          ],
-          requirements: [{ branch: "task", state_id: fixture.states.Live, fields: ["start_date"] }],
-        },
-      })
-    ).ok()
-  ).toBeTruthy();
+  await page.addInitScript(() =>
+    Object.defineProperty(window.crypto, "randomUUID", { value: undefined, configurable: true })
+  );
+  await configureTaskFieldTransition(page);
   const created = await page.request.post(api + projectPath + "issues/", { data: { name: "Browser drag fields" } });
   expect(created.ok()).toBeTruthy();
   const issueId = (await created.json()).id;
@@ -287,7 +315,8 @@ test("kanban drag collects required fields before committing a transition", asyn
   ).toBeTruthy();
   await page.goto(`/${fixture.workspaceSlug}/projects/${fixture.projectId}/issues/`);
   const card = page.locator(`a[id^="issue_${issueId}_"]`).first();
-  const column = page.locator(`[id^="${fixture.states.Live}__"]`);
+  expect(await page.evaluate(() => typeof crypto.randomUUID)).toBe("undefined");
+  const column = page.locator(`[id^="${fixture.states.Reviewed}__"]`);
   await expect(card).toBeVisible();
   await card.dragTo(column);
   const dialog = page.getByRole("dialog", { name: "Complete transition fields", exact: true });
@@ -298,13 +327,57 @@ test("kanban drag collects required fields before committing a transition", asyn
   await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
   await card.dragTo(column);
   await expect(dialog).toBeVisible();
-  await dialog.getByTestId("workflow-start-date").click();
-  await page.getByRole("button", { name: /November 10(th)?, 2026/ }).click();
+  await completeTransitionFields(page);
   await dialog.getByRole("button", { name: "Apply transition", exact: true }).click();
   await expect(dialog).not.toBeVisible();
   await expect
     .poll(async () => (await (await page.request.get(api + projectPath + `issues/${issueId}/`)).json()).state_id)
-    .toBe(fixture.states.Live);
+    .toBe(fixture.states.Reviewed);
+  const actual = await (await page.request.get(api + projectPath + `issues/${issueId}/`)).json();
+  expect(actual.assignee_ids).toContain(fixture.userId);
+  expect(actual.start_date).toBe("2026-11-10");
+  expect(actual.target_date).toBe("2026-11-12");
+});
+
+test("kanban card state selector submits completed transition fields", async ({ page }) => {
+  test.setTimeout(120_000);
+  await configureTaskFieldTransition(page);
+  const created = await page.request.post(api + projectPath + "issues/", { data: { name: "Browser card fields" } });
+  expect(created.ok()).toBeTruthy();
+  const issueId = (await created.json()).id;
+  const props = await (await page.request.get(api + projectPath + "user-properties/")).json();
+  expect(
+    (
+      await page.request.patch(api + projectPath + "user-properties/", {
+        data: {
+          display_filters: { ...props.display_filters, layout: "kanban", group_by: "state", sub_group_by: null },
+          display_properties: { ...props.display_properties, state: true },
+        },
+      })
+    ).ok()
+  ).toBeTruthy();
+  await page.goto(`/${fixture.workspaceSlug}/projects/${fixture.projectId}/issues/`);
+  const card = page.locator(`a[id^="issue_${issueId}_"]`).first();
+  await card.getByRole("button", { name: "State, Ready", exact: true }).click();
+  await page.getByRole("option", { name: "Reviewed", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Complete transition fields", exact: true });
+  await expect(dialog).toBeVisible();
+  // A rejected submission must show the reason and leave the field editor open.
+  await dialog.getByRole("button", { name: "Apply transition", exact: true }).click();
+  await expect(dialog.getByRole("alert")).toContainText("Assignees");
+  await expect(dialog).toBeVisible();
+  await completeTransitionFields(page);
+  const saved = page.waitForResponse(
+    (r) => r.url().endsWith(`/issues/${issueId}/`) && r.request().method() === "PATCH"
+  );
+  await dialog.getByRole("button", { name: "Apply transition", exact: true }).click();
+  expect((await saved).ok()).toBeTruthy();
+  await expect(dialog).not.toBeVisible();
+  const actual = await (await page.request.get(api + projectPath + `issues/${issueId}/`)).json();
+  expect(actual.state_id).toBe(fixture.states.Reviewed);
+  expect(actual.assignee_ids).toContain(fixture.userId);
+  expect(actual.start_date).toBe("2026-11-10");
+  expect(actual.target_date).toBe("2026-11-12");
 });
 
 test("all five layouts keep work-item creation in the page toolbar", async ({ page }) => {

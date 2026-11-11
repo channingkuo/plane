@@ -9,6 +9,8 @@ import type { TIssue } from "@plane/types";
 import { WorkflowFieldsDialog } from "./workflow-dialog";
 
 const eventName = "plane:workflow-fields-request";
+// These keys identify dialogs within this page, so no secure-context crypto API is needed.
+let requestSequence = 0;
 type Request = {
   key: string;
   projectId: string;
@@ -22,7 +24,12 @@ type Request = {
 /** A drag/drop action can collect fields without coupling stores to React. */
 export function requestWorkflowFields(request: Omit<Request, "key" | "finish" | "handled">): Promise<void> {
   return new Promise((resolve, reject) => {
-    const detail: Request = { ...request, key: crypto.randomUUID(), finish: resolve, handled: false };
+    const detail: Request = {
+      ...request,
+      key: `workflow-fields-${++requestSequence}`,
+      finish: resolve,
+      handled: false,
+    };
     window.dispatchEvent(new CustomEvent(eventName, { detail }));
     if (!detail.handled) reject(new Error("Workflow field editor is unavailable"));
   });
