@@ -53,5 +53,9 @@ export type TWorkflowCreationContext = {
   revision?: number;
   initial_state_id?: string;
   fields?: TWorkflowField[];
-  intake?: { state: TWorkflowState; fields: TWorkflowField[] };
+  intake?: {
+    state: TWorkflowState;
+    fields: TWorkflowField[];
+    acceptance: { state: TWorkflowState; fields: TWorkflowField[] };
+  };
 };

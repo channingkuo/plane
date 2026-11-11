@@ -38,6 +38,7 @@ import { useUserProfile } from "@/hooks/store/user";
 import { usePlatformOS } from "@/hooks/use-platform-os";
 
 type TIssueDefaultPropertiesProps = {
+  isIntakeAcceptance?: boolean;
   control: Control<TIssue>;
   id: string | undefined;
   projectId: string | null;
@@ -93,6 +94,7 @@ export const IssueDefaultProperties = observer(function IssueDefaultProperties(p
         render={({ field: { value, onChange } }) => (
           <StateSelect
             isForWorkItemCreation
+            isIntakeAcceptance={props.isIntakeAcceptance}
             testId="create-work-item-state-select"
             // an empty state shows the project's default state, as the legacy dropdown did
             value={value || getProjectDefaultStateId(projectId)}

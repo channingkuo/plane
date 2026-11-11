@@ -6,7 +6,7 @@ import { workflowService } from "@/services/workflow.service";
  * See the LICENSE file for details.
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { MouseEvent } from "react";
 import { observer } from "mobx-react";
 import {
@@ -31,7 +31,7 @@ import { IconButton } from "@makeplane/propel/components/icon-button";
 import { Icon } from "@makeplane/propel/components/icon";
 import { Menu, MenuContent, MenuItem, MenuTrigger } from "@makeplane/propel/components/menu";
 import { setToast } from "@plane/blocks/toast";
-import type { TNameDescriptionLoader } from "@plane/types";
+import type { TIssue, TNameDescriptionLoader } from "@plane/types";
 import { EInboxIssueStatus } from "@plane/types";
 import { Row } from "@plane/blocks/layout";
 import { copyUrlToClipboard, findHowManyDaysLeft, generateWorkItemLink } from "@plane/utils";
@@ -79,6 +79,7 @@ export const InboxIssueActionsHeader = observer(function InboxIssueActionsHeader
   const [isSnoozeDateModalOpen, setIsSnoozeDateModalOpen] = useState(false);
   const [selectDuplicateIssue, setSelectDuplicateIssue] = useState(false);
   const [acceptIssueModal, setAcceptIssueModal] = useState(false);
+  const nextAfterAcceptance = useRef<string | undefined>(undefined);
   const [declineIssueModal, setDeclineIssueModal] = useState(false);
   const [deleteIssueModal, setDeleteIssueModal] = useState(false);
   // store
@@ -146,11 +147,9 @@ export const InboxIssueActionsHeader = observer(function InboxIssueActionsHeader
     }
   };
 
-  const handleInboxIssueAccept = async () => {
-    const nextOrPreviousIssueId = redirectIssue();
-    await inboxIssue?.updateInboxIssueStatus(EInboxIssueStatus.ACCEPTED);
-    setAcceptIssueModal(false);
-    handleRedirection(nextOrPreviousIssueId);
+  const handleInboxIssueAccept = async (payload: Partial<TIssue>) => {
+    nextAfterAcceptance.current = redirectIssue();
+    return inboxIssue?.updateInboxIssueStatus(EInboxIssueStatus.ACCEPTED, payload);
   };
 
   const handleInboxIssueDecline = async () => {
@@ -274,7 +273,11 @@ export const InboxIssueActionsHeader = observer(function InboxIssueActionsHeader
           data={inboxIssue?.issue}
           isOpen={acceptIssueModal}
           onClose={() => setAcceptIssueModal(false)}
-          beforeFormSubmit={handleInboxIssueAccept}
+          updateIssueOverride={handleInboxIssueAccept}
+          onSubmit={async () => handleRedirection(nextAfterAcceptance.current)}
+          isIntakeAcceptance
+          isProjectSelectionDisabled
+          allowedProjectIds={[projectId]}
           withDraftIssueWrapper={false}
           fetchIssueDetails={false}
           showActionItemsOnUpdate

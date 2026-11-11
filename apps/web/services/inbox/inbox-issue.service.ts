@@ -53,7 +53,10 @@ export class InboxIssueService extends APIService {
     projectId: string,
     inboxIssueId: string,
     // snoozed_till as "YYYY-MM-DD" is read as a day in the project timezone
-    data: Omit<Partial<TInboxIssue>, "snoozed_till"> & { snoozed_till?: string | null }
+    data: Omit<Partial<TInboxIssue>, "snoozed_till" | "issue"> & {
+      snoozed_till?: string | null;
+      issue?: Partial<TIssue>;
+    }
   ): Promise<TInboxIssue> {
     return this.patch(`/api/workspaces/${workspaceSlug}/projects/${projectId}/inbox-issues/${inboxIssueId}/`, data)
       .then((response) => response?.data)
