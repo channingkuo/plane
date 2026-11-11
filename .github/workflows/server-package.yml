@@ -37,8 +37,15 @@ jobs:
   validate:
     name: Validate deployment tools
     runs-on: ubuntu-24.04
+    outputs:
+      image_tag: ${{ steps.version.outputs.image_tag }}
     steps:
       - uses: actions/checkout@v6
+      - name: Read application image version
+        id: version
+        run: |
+          image_tag="$(python3 deployments/server/package.py --print-image-tag)"
+          echo "image_tag=$image_tag" >> "$GITHUB_OUTPUT"
       - name: Check scripts and deployment contracts
         run: |
           bash -n deployments/server/deploy.sh
@@ -81,13 +88,14 @@ jobs:
           context: ${{ matrix.context }}
           file: ${{ matrix.dockerfile }}
           platforms: linux/${{ env.BUILD_ARCH }}
-          tags: plane-selfhost/${{ matrix.name }}:${{ github.sha }}
+          tags: plane-selfhost/${{ matrix.name }}:${{ needs.validate.outputs.image_tag }}
           outputs: type=docker,dest=${{ runner.temp }}/${{ matrix.name }}.tar
           cache-from: type=gha,scope=server-${{ matrix.name }}-${{ env.BUILD_ARCH }}
           cache-to: type=gha,mode=max,scope=server-${{ matrix.name }}-${{ env.BUILD_ARCH }}
           labels: |
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ needs.validate.outputs.image_tag }}
             org.opencontainers.image.licenses=AGPL-3.0-only
       - name: Compress Docker image
         env:
@@ -135,7 +143,7 @@ jobs:
       - uses: actions/upload-artifact@v7
         id: release
         with:
-          name: plane-server-linux-${{ env.BUILD_ARCH }}-${{ github.sha }}
+          name: plane-server-linux-${{ env.BUILD_ARCH }}-${{ needs.validate.outputs.image_tag }}-${{ github.sha }}
           path: |
             ${{ runner.temp }}/release/*.tar.gz
             ${{ runner.temp }}/release/SHA256SUMS
@@ -144,9 +152,11 @@ jobs:
           if-no-files-found: error
       - name: Prepare release version
         id: version
+        env:
+          PLANE_VERSION: ${{ needs.validate.outputs.image_tag }}
         run: |
-          echo "tag=server-$BUILD_ARCH-${GITHUB_SHA:0:12}" >> "$GITHUB_OUTPUT"
-          echo "name=Plane server ${GITHUB_SHA:0:12} (linux/$BUILD_ARCH)" >> "$GITHUB_OUTPUT"
+          echo "tag=server-$BUILD_ARCH-$PLANE_VERSION-${GITHUB_SHA:0:12}" >> "$GITHUB_OUTPUT"
+          echo "name=Plane server $PLANE_VERSION (linux/$BUILD_ARCH)" >> "$GITHUB_OUTPUT"
       - name: Publish offline package to GitHub Release
         id: github-release
         uses: softprops/action-gh-release@v2.6.1
@@ -166,12 +176,14 @@ jobs:
         env:
           ARTIFACT_URL: ${{ steps.release.outputs.artifact-url }}
           RELEASE_URL: ${{ steps.github-release.outputs.url }}
+          PLANE_VERSION: ${{ needs.validate.outputs.image_tag }}
         run: |
           {
             echo "## Server package ready"
             echo "GitHub Release: $RELEASE_URL"
             echo "Actions artifact backup: $ARTIFACT_URL"
             echo "Architecture: linux/$BUILD_ARCH"
+            echo "Application image version: $PLANE_VERSION"
             echo "Source commit: $GITHUB_SHA"
             echo 'The archive includes all application and infrastructure images; no registry login or server-side build is needed.'
             echo 'Download the .tar.gz and SHA256SUMS from the GitHub Release assets:'
