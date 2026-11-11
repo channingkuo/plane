@@ -4,7 +4,7 @@
  * See the LICENSE file for details.
  */
 
-import { action, observable, makeObservable, computed, runInAction } from "mobx";
+import { action, observable, makeObservable, computed } from "mobx";
 // base class
 import type {
   TIssue,
@@ -127,14 +127,9 @@ export class ProfileIssues extends BaseIssuesStore implements IProfileIssues {
     view: TProfileViews,
     isExistingPaginationOptions: boolean = false
   ) => {
+    options = this.refreshPaginationOptions(loadType, options);
+    const requestController = this.beginFetch(loadType, !isExistingPaginationOptions);
     try {
-      // set loader and clear store
-      runInAction(() => {
-        this.setLoader(loadType);
-      });
-      this.clear(!isExistingPaginationOptions);
-
-      // set ViewId
       this.setViewId(view);
 
       // get params from pagination options
@@ -152,13 +147,16 @@ export class ProfileIssues extends BaseIssuesStore implements IProfileIssues {
 
       // call the fetch issues API with the params
       const response = await this.userService.getUserProfileIssues(workspaceSlug, userId, params, {
-        signal: this.controller.signal,
+        signal: requestController.signal,
       });
+
+      if (requestController.signal.aborted) return;
 
       // after fetching issues, call the base method to process the response further
       this.onfetchIssues(response, options, workspaceSlug, undefined, undefined, !isExistingPaginationOptions);
       return response;
     } catch (error) {
+      if (requestController.signal.aborted) return;
       // set loader to undefined if errored out
       this.setLoader(undefined);
       throw error;

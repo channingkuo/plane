@@ -61,15 +61,23 @@ export const ProjectLayoutRoot = observer(function ProjectLayoutRoot() {
     !!projectId &&
     workspaceProjectsPermissions[workspaceSlug]?.[projectId] === EUserPermissions.MEMBER;
   useEffect(() => {
+    let refreshTimer: number | undefined;
     const refresh = (event: Event) => {
-      const detail = (event as CustomEvent<{ workspaceSlug: string; projectId: string }>).detail;
+      const detail = (event as CustomEvent<{ workspaceSlug: string; projectId: string; listChanged?: boolean }>).detail;
+      if (detail?.listChanged === false) return;
       if (detail?.workspaceSlug === workspaceSlug && detail?.projectId === projectId && workspaceSlug && projectId) {
-        void issues.fetchIssuesWithExistingPagination(workspaceSlug, projectId, "mutation");
+        window.clearTimeout(refreshTimer);
+        refreshTimer = window.setTimeout(() => {
+          void issues.fetchIssuesWithExistingPagination(workspaceSlug, projectId, "mutation").catch((error) => {
+            console.error("Could not refresh project work items", error);
+          });
+        }, 100);
       }
     };
     window.addEventListener("plane:workflow-updated", refresh);
     return () => {
       window.removeEventListener("plane:workflow-updated", refresh);
+      window.clearTimeout(refreshTimer);
       issues.setWorkItemScope("mine");
     };
   }, [issues, workspaceSlug, projectId]);

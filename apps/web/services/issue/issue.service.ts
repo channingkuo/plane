@@ -230,13 +230,23 @@ export class IssueService extends APIService {
   async patchIssue(workspaceSlug: string, projectId: string, issueId: string, data: Partial<TIssue>): Promise<any> {
     return this.patch(`/api/workspaces/${workspaceSlug}/projects/${projectId}/${this.serviceType}/${issueId}/`, data)
       .then(async (response) => {
-        void mutate(["project-issue-hierarchy", workspaceSlug, projectId]);
+        const workflowEnabled = response.headers["x-plane-workflow"] === "enabled";
+        const issue = workflowEnabled
+          ? await this.retrieve(workspaceSlug, projectId, issueId).catch(() => response.data)
+          : response.data;
+        if ("parent_id" in data || "state_id" in data)
+          void mutate(["project-issue-hierarchy", workspaceSlug, projectId]);
         window.dispatchEvent(
-          new CustomEvent("plane:workflow-updated", { detail: { workspaceSlug, projectId, issueId } })
+          new CustomEvent("plane:workflow-updated", {
+            detail: {
+              workspaceSlug,
+              projectId,
+              issueId,
+              listChanged: ["state_id", "parent_id", "assignee_ids", "assignees"].some((field) => field in data),
+            },
+          })
         );
-        if (response.headers["x-plane-workflow"] === "enabled")
-          return this.retrieve(workspaceSlug, projectId, issueId).catch(() => response.data);
-        return response?.data;
+        return issue;
       })
       .catch((error) => {
         throw error?.response?.data;

@@ -47,6 +47,12 @@ import {
 } from "./base-issues-utils";
 import type { IBaseIssueFilterStore } from "./issue-filter-helper.store";
 
+function loadedCount(value: unknown): number {
+  if (Array.isArray(value)) return value.length;
+  if (value && typeof value === "object") return Math.max(0, ...Object.values(value).map(loadedCount));
+  return 0;
+}
+
 export type TIssueDisplayFilterOptions = Exclude<TIssueGroupByOptions, null> | "target_date";
 
 export enum EIssueGroupedAction {
@@ -225,6 +231,7 @@ export abstract class BaseIssuesStore implements IBaseIssuesStore {
       onfetchIssues: action.bound,
       onfetchNexIssues: action.bound,
       clear: action.bound,
+      beginFetch: action.bound,
       setLoader: action.bound,
       addIssue: action.bound,
       removeIssueFromList: action.bound,
@@ -555,6 +562,7 @@ export abstract class BaseIssuesStore implements IBaseIssuesStore {
     if (!workflow?.enabled) return;
     const pending = new Set(issueIds.filter((id): id is string => !!id));
     const visited = new Set<string>();
+    let listChanged = false;
     while (pending.size) {
       const ids = [...pending].filter((id) => !visited.has(id));
       pending.clear();
@@ -569,12 +577,15 @@ export abstract class BaseIssuesStore implements IBaseIssuesStore {
       );
       for (const { previous, issue } of rows) {
         if (!issue) continue;
+        if ((issue.sub_issues_count ?? 0) > (previous?.sub_issues_count ?? 0)) listChanged = true;
         this.rootIssueStore.issues.updateIssue(issue.id, issue);
         if (previous) this.updateIssueList(issue, previous);
         if (issue.parent_id) pending.add(issue.parent_id);
       }
     }
-    window.dispatchEvent(new CustomEvent("plane:workflow-updated", { detail: { workspaceSlug, projectId } }));
+    window.dispatchEvent(
+      new CustomEvent("plane:workflow-updated", { detail: { workspaceSlug, projectId, listChanged } })
+    );
   }
 
   /**
@@ -1229,6 +1240,26 @@ export abstract class BaseIssuesStore implements IBaseIssuesStore {
     });
     this.controller.abort();
     this.controller = new AbortController();
+  }
+
+  /** Keep mounted layouts and their scroll positions while revalidating their API data. */
+  beginFetch(loadType: TLoader, shouldClearPaginationOptions = true) {
+    if (loadType === "mutation" && this.groupedIssueIds !== undefined) {
+      this.controller.abort();
+      this.controller = new AbortController();
+    } else {
+      this.clear(shouldClearPaginationOptions);
+    }
+    this.setLoader(loadType);
+    return this.controller;
+  }
+
+  refreshPaginationOptions(loadType: TLoader, options: IssuePaginationOptions) {
+    if (loadType !== "mutation" || !this.groupedIssueIds) return options;
+    return {
+      ...options,
+      perPageCount: Math.min(1000, Math.max(options.perPageCount, loadedCount(this.groupedIssueIds) + 1)),
+    };
   }
 
   /**
