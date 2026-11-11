@@ -438,7 +438,9 @@ class IntakeIssueViewSet(BaseViewSet):
 
         # Both serializers are valid, now save them
         if issue_serializer:
-            issue_serializer.save()
+            # Acceptance validation may have cached the issue before these edits.
+            # Keep that relation fresh so legacy state updates cannot overwrite the form.
+            intake_issue.issue = issue_serializer.save()
 
             # Check if the update is a migration description update
             is_migration_description_update = skip_activity and is_description_update

@@ -54,6 +54,7 @@ import { usePlatformOS } from "@/hooks/use-platform-os";
 import { useProjectIssueProperties } from "@/hooks/use-project-issue-properties";
 
 export interface IssueFormProps {
+  isIntakeAcceptance?: boolean;
   data?: Partial<TIssue>;
   issueTitleRef: React.MutableRefObject<HTMLInputElement | null>;
   isCreateMoreToggleEnabled: boolean;
@@ -417,6 +418,7 @@ export const IssueFormRoot = observer(function IssueFormRoot(props: IssueFormPro
             </DialogBody>
             <div className="shrink-0">
               <IssueDefaultProperties
+                isIntakeAcceptance={props.isIntakeAcceptance}
                 control={control}
                 id={data?.id}
                 projectId={projectId}

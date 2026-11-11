@@ -67,6 +67,53 @@ def url(project):
     return f"/api/workspaces/{project.workspace.slug}/projects/{project.pk}/workflow/"
 
 
+@pytest.mark.parametrize("route", ["intake-issues", "inbox-issues"])
+def test_accept_intake_with_form_edits_atomically(session_client, workflow_project, create_user, route):
+    project, payload = workflow_project
+    Intake.objects.create(project=project, workspace=project.workspace, name="Intake", is_default=True)
+    payload["intake_submission_state_id"] = payload["task_initial_state_id"]
+    payload["requirements"] = [
+        {"branch": "requirement", "state_id": payload["intake_acceptance_state_id"], "fields": ["assignees"]}
+    ]
+    assert session_client.put(url(project), payload, format="json").status_code == 200
+    context = session_client.get(url(project) + "creation/").data
+    assert str(context["intake"]["acceptance"]["state"]["id"]) == payload["intake_acceptance_state_id"]
+    assert context["intake"]["acceptance"]["fields"] == ["assignees"]
+    endpoint = url(project).replace("workflow/", f"{route}/")
+    created = session_client.post(endpoint, {"issue": {"name": "Original"}}, format="json")
+    assert created.status_code == 200, created.data
+    issue = Issue.objects.get(pk=created.data["issue"]["id"])
+    detail = endpoint + str(issue.pk) + "/"
+    rejected = session_client.patch(detail, {"status": 1, "issue": {"name": "Rejected edit"}}, format="json")
+    assert rejected.status_code == 400, rejected.data
+    issue.refresh_from_db()
+    assert issue.name == "Original"
+    assert IntakeIssue.objects.get(issue=issue).status == -2
+    assert issue.workflow_context.accepted_at is None
+    assert WorkflowAudit.objects.filter(project=project, operation="intake.accepted").count() == 0
+
+    accepted = session_client.patch(
+        detail,
+        {
+            "status": 1,
+            "issue": {
+                "name": "Reviewed edit",
+                "state_id": payload["intake_acceptance_state_id"],
+                "assignee_ids": [str(create_user.pk)],
+            },
+        },
+        format="json",
+    )
+    assert accepted.status_code == 200, accepted.data
+    assert str(accepted.data["issue"]["state_id"]) == payload["intake_acceptance_state_id"]
+    issue.refresh_from_db()
+    assert issue.name == "Reviewed edit"
+    assert str(issue.state_id) == payload["intake_acceptance_state_id"]
+    assert IntakeIssue.objects.get(issue=issue).status == 1
+    assert IssueWorkflowContext.objects.get(issue=issue).accepted_by == create_user
+    assert WorkflowAudit.objects.filter(project=project, operation="intake.accepted").count() == 1
+
+
 def test_configuration_round_trip_and_stale_revision(session_client, workflow_project):
     project, payload = workflow_project
     result = session_client.put(url(project), payload, format="json")
@@ -77,6 +124,32 @@ def test_configuration_round_trip_and_stale_revision(session_client, workflow_pr
     assert fetched.data["task_initial_state_id"] == payload["task_initial_state_id"]
     assert session_client.put(url(project), payload, format="json").status_code == 409
     assert WorkflowAudit.objects.filter(project=project).count() == 1
+
+
+@pytest.mark.parametrize("route", ["intake-issues", "inbox-issues"])
+def test_accept_intake_preserves_form_edits_without_workflow(session_client, workflow_project, route):
+    project, _ = workflow_project
+    Intake.objects.create(project=project, workspace=project.workspace, name="Intake", is_default=True)
+    default = State.objects.get(project=project, name="Todo")
+    default.default = True
+    default.save()
+    endpoint = url(project).replace("workflow/", f"{route}/")
+    created = session_client.post(endpoint, {"issue": {"name": "Original"}}, format="json")
+    assert created.status_code == 200, created.data
+    issue_id = created.data["issue"]["id"]
+    accepted = session_client.patch(
+        endpoint + str(issue_id) + "/",
+        {
+            "status": 1,
+            "issue": {"name": "Edited", "description_html": "<p>Edited description</p>"},
+        },
+        format="json",
+    )
+    assert accepted.status_code == 200, accepted.data
+    issue = Issue.objects.get(pk=issue_id)
+    assert issue.name == "Edited"
+    assert issue.description_html == "<p>Edited description</p>"
+    assert issue.state_id == default.pk
 
 
 def test_project_admin_cannot_edit_configuration(session_client, workflow_project, create_user):

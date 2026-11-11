@@ -25,6 +25,7 @@ type StateSelectWebProps = {
   issueId?: string;
   issueValues?: Partial<TIssue>;
   isForWorkItemCreation?: boolean;
+  isIntakeAcceptance?: boolean;
   onWorkflowChange?: (patch: Partial<TIssue>) => Promise<unknown> | unknown;
   /** Project whose states are offered. */
   projectId: string | undefined;
@@ -76,7 +77,7 @@ export const StateSelect = observer(function StateSelect(props: StateSelectWebPr
     testId,
     tabIndex,
   } = props;
-  const { issueId, issueValues, isForWorkItemCreation, onWorkflowChange } = props;
+  const { issueId, issueValues, isForWorkItemCreation, isIntakeAcceptance, onWorkflowChange } = props;
   const [rules, setRules] = useState<TIssueWorkflow | null>(null);
   const [pending, setPending] = useState<string | null>(null);
   const [problem, setProblem] = useState("");
@@ -87,10 +88,11 @@ export const StateSelect = observer(function StateSelect(props: StateSelectWebPr
     isForWorkItemCreation && workspaceSlug && projectId ? ["workflow-creation", workspaceSlug, projectId] : null,
     () => workflowService.creation(String(workspaceSlug), projectId!)
   );
+  const initialStateId = isIntakeAcceptance ? creation?.intake?.acceptance?.state.id : creation?.initial_state_id;
+  const requiredFields = isIntakeAcceptance ? creation?.intake?.acceptance?.fields : creation?.fields;
   useEffect(() => {
-    if (creation?.enabled && creation.initial_state_id && value !== creation.initial_state_id)
-      onChange(creation.initial_state_id);
-  }, [creation, value, onChange]);
+    if (creation?.enabled && initialStateId && value !== initialStateId) onChange(initialStateId);
+  }, [creation?.enabled, initialStateId, value, onChange]);
   // store hooks
   const { getProjectStateIds, getStateById, fetchProjectStates } = useProjectState();
   // translation
@@ -207,10 +209,10 @@ export const StateSelect = observer(function StateSelect(props: StateSelectWebPr
           ))}
         </ul>
       )}
-      {creation?.enabled && !!creation.fields?.length && (
+      {creation?.enabled && !!requiredFields?.length && (
         <span className="text-body-xs-regular">
           {t("project_settings.workflow.required")}:{" "}
-          {creation.fields.map((field) => t(`project_settings.workflow.${field}`)).join(", ")}
+          {requiredFields.map((field) => t(`project_settings.workflow.${field}`)).join(", ")}
         </span>
       )}
       {pending && projectId && (

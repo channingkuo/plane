@@ -419,7 +419,7 @@ test("missing task paths explain the configuration and adding a path enables dra
     .toBe(fixture.states.Reviewed);
 });
 
-test("Intake form uses the configured submission state and sends required fields", async ({ page }) => {
+test("Intake shows configured states and accepts form edits in one request", async ({ page }) => {
   test.setTimeout(120_000);
   const config = await (await page.request.get(api + projectPath + "workflow/")).json();
   // A non-Triage submission state reproduces the deployed UI's legacy alias bug.
@@ -429,7 +429,25 @@ test("Intake form uses the configured submission state and sends required fields
         data: {
           ...config,
           enabled: true,
+          task_initial_state_id: fixture.states.Ready,
           intake_submission_state_id: fixture.states.Ready,
+          intake_acceptance_state_id: fixture.states.Reviewed,
+          requirement_completed_state_id: fixture.states.Live,
+          requirement_reopen_state_id: fixture.states.Reviewed,
+          transitions: [
+            {
+              branch: "requirement",
+              from_state_id: fixture.states.Reviewed,
+              to_state_id: fixture.states.Live,
+              roles: [20],
+            },
+            {
+              branch: "requirement",
+              from_state_id: fixture.states.Live,
+              to_state_id: fixture.states.Reviewed,
+              roles: [20],
+            },
+          ],
           requirements: [
             {
               branch: "requirement",
@@ -471,4 +489,29 @@ test("Intake form uses the configured submission state and sends required fields
   expect(body.issue.target_date).toBe("2026-11-12");
   await expect(dialog).not.toBeVisible();
   await expect(page.getByText("Browser intake submission", { exact: true }).first()).toBeVisible();
+  await page.locator(`a[href*="inboxIssueId=${body.issue.id}"]`).click();
+  await expect(page.getByRole("button", { name: "State, Ready", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Accept", exact: true }).click();
+  const acceptance = page.getByRole("dialog", { name: /Move .* to project work items/ });
+  await expect(acceptance.getByTestId("create-work-item-state-select")).toContainText("Reviewed");
+  await expect(acceptance.getByTestId("create-work-item-state-select")).toBeDisabled();
+  await acceptance.getByPlaceholder("Title", { exact: true }).fill("Browser reviewed submission");
+  const updates: string[] = [];
+  page.on("request", (request) => {
+    if (request.method() === "PATCH") updates.push(request.url());
+  });
+  const accepted = page.waitForResponse(
+    (r) => r.url().includes(`/inbox-issues/${body.issue.id}/`) && r.request().method() === "PATCH"
+  );
+  await acceptance.getByRole("button", { name: "Add to project", exact: true }).click();
+  const result = await accepted;
+  expect(result.ok()).toBeTruthy();
+  const reviewed = await result.json();
+  expect(reviewed.status).toBe(1);
+  expect(reviewed.issue.name).toBe("Browser reviewed submission");
+  expect(reviewed.issue.state_id).toBe(fixture.states.Reviewed);
+  await expect(acceptance).not.toBeVisible();
+  await expect(page.getByText("Work item could not be updated", { exact: true })).not.toBeVisible();
+  expect(updates.filter((url) => url.includes(`/inbox-issues/${body.issue.id}/`))).toHaveLength(1);
+  expect(updates.filter((url) => url.includes(`/issues/${body.issue.id}/`))).toHaveLength(0);
 });

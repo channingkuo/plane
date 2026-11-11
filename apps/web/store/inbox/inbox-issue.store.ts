@@ -33,7 +33,7 @@ export interface IInboxIssueStore {
   created_by: string | undefined;
   duplicate_issue_detail: TInboxDuplicateIssueDetails | undefined;
   // actions
-  updateInboxIssueStatus: (status: TInboxIssueStatus) => Promise<void>; // accept, decline
+  updateInboxIssueStatus: (status: TInboxIssueStatus, issue?: Partial<TIssue>) => Promise<TIssue | undefined>; // accept, decline
   updateInboxIssueDuplicateTo: (issueId: string) => Promise<void>; // connecting the inbox issue to the project existing issue
   updateInboxIssueSnoozeTill: (date: Date | undefined) => Promise<void>; // snooze the issue
   updateIssue: (issue: Partial<TIssue>) => Promise<void>; // updating the issue
@@ -97,7 +97,7 @@ export class InboxIssueStore implements IInboxIssueStore {
     });
   }
 
-  updateInboxIssueStatus = async (status: TInboxIssueStatus) => {
+  updateInboxIssueStatus = async (status: TInboxIssueStatus, issue?: Partial<TIssue>) => {
     const previousData: Partial<TInboxIssue> = {
       status: this.status,
     };
@@ -108,9 +108,11 @@ export class InboxIssueStore implements IInboxIssueStore {
 
       const inboxIssue = await this.inboxIssueService.update(this.workspaceSlug, this.projectId, this.issue.id, {
         status: status,
+        ...(issue ? { issue } : {}),
       });
       runInAction(() => {
         set(this, "status", inboxIssue?.status);
+        set(this, "issue", { ...this.issue, ...inboxIssue.issue });
 
         // Handle intake_count transitions
         if (previousStatus === EInboxIssueStatus.PENDING && inboxIssue.status !== EInboxIssueStatus.PENDING) {
@@ -138,8 +140,10 @@ export class InboxIssueStore implements IInboxIssueStore {
         const updatedIssue = { ...this.issue, ...inboxIssue.issue };
         this.store.issue.issues.addIssue([updatedIssue]);
       }
-    } catch {
+      return this.issue as TIssue;
+    } catch (error) {
       runInAction(() => set(this, "status", previousData.status));
+      throw error;
     }
   };
 

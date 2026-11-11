@@ -18,6 +18,9 @@ export interface IssuesModalProps {
   isOpen: boolean;
   onClose: () => void;
   beforeFormSubmit?: () => Promise<void>;
+  /** Replace the regular issue PATCH when edits belong to another operation, such as Intake acceptance. */
+  updateIssueOverride?: (payload: Partial<TIssue>) => Promise<TIssue | undefined>;
+  isIntakeAcceptance?: boolean;
   onSubmit?: (res: TIssue) => Promise<void>;
   withDraftIssueWrapper?: boolean;
   storeType?: EIssuesStoreType;

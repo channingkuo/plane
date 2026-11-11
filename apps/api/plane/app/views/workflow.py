@@ -114,15 +114,25 @@ class WorkflowCreationContextEndpoint(BaseAPIView):
         if not workflow:
             return Response({"enabled": False})
         data = canonical(configuration(workflow))
+        states = {str(state["id"]): state for state in state_options(project)}
         return Response(
             {
                 "enabled": True,
                 "revision": workflow.revision,
                 "initial_state_id": data["task_initial_state_id"],
                 "intake": {
-                    "state": next(
-                        s for s in state_options(project) if str(s["id"]) == data["intake_submission_state_id"]
-                    ),
+                    "acceptance": {
+                        "state": states[data["intake_acceptance_state_id"]],
+                        "fields": next(
+                            (
+                                r["fields"]
+                                for r in data["requirements"]
+                                if r["branch"] == "requirement" and r["state_id"] == data["intake_acceptance_state_id"]
+                            ),
+                            [],
+                        ),
+                    },
+                    "state": states[data["intake_submission_state_id"]],
                     "fields": next(
                         (
                             r["fields"]
