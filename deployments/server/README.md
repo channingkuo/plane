@@ -4,7 +4,7 @@
 
 ## 获取构建包
 
-在本仓库的 **Releases** 中打开对应的 `Plane server <version>-XMW (linux/amd64)`，例如 `Plane server v1.5.0-XMW (linux/amd64)`，从 Assets 下载 `plane-server-linux-amd64-v1.5.0-XMW.tar.gz` 和 `SHA256SUMS`。Release Notes 包含完整部署、HTTPS、维护和升级说明。
+在本仓库的 **Releases** 中打开对应的版本，例如 `v1.5.0-XMW`，从 Assets 下载 `plane-server-linux-amd64-v1.5.0-XMW.tar.gz` 和 `SHA256SUMS`。Release 标题只使用版本号，CPU 架构见附件名称和 Release Notes；Release Notes 包含完整部署、HTTPS、维护和升级说明。
 
 构建成功后自动发布预发布版本，Release 标签格式为 `server-<architecture>-<version>-XMW-<short-commit>`。短提交号仅用于区分同一版本的多次构建；应用镜像标签使用真实版本号加 `-XMW`，不使用提交哈希。
 

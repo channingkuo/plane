@@ -156,7 +156,7 @@ jobs:
           PLANE_VERSION: ${{ needs.validate.outputs.image_tag }}
         run: |
           echo "tag=server-$BUILD_ARCH-$PLANE_VERSION-${GITHUB_SHA:0:12}" >> "$GITHUB_OUTPUT"
-          echo "name=Plane server $PLANE_VERSION (linux/$BUILD_ARCH)" >> "$GITHUB_OUTPUT"
+          echo "name=$PLANE_VERSION" >> "$GITHUB_OUTPUT"
       - name: Publish offline package to GitHub Release
         id: github-release
         uses: softprops/action-gh-release@v2.6.1
