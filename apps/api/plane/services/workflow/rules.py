@@ -26,6 +26,7 @@ STATE_FIELDS = (
 REQUIRED_FIELDS = {"assignees", "start_date", "target_date"}
 ROLES = {5, 15, 20}
 BRANCHES = {"task", "requirement"}
+OPTIONAL_STATE_FIELDS = ("test_task_initial_state_id",)
 
 
 def validate_configuration(config, states):
@@ -42,6 +43,9 @@ def validate_configuration(config, states):
         raise Violation("WORKFLOW_INVALID_CONFIGURATION", "任务初始状态和接收状态不能属于 Triage")
     if states[completed] != "completed" or states[reopened] in {"completed", "cancelled", "triage"}:
         raise Violation("WORKFLOW_INVALID_CONFIGURATION", "父需求完成或退回状态分组不合法")
+    test_state = config.get("test_task_initial_state_id")
+    if test_state and (test_state not in states or states[test_state] in {"completed", "cancelled", "triage"}):
+        raise Violation("WORKFLOW_INVALID_CONFIGURATION", "测试任务初始状态必须是当前项目的未完成状态")
     seen = set()
     for transition in config.get("transitions", []):
         branch = transition.get("branch")
@@ -50,6 +54,16 @@ def validate_configuration(config, states):
         key = (branch, source, target)
         if branch not in BRANCHES or source not in states or target not in states or key in seen:
             raise Violation("WORKFLOW_INVALID_CONFIGURATION", "流转状态、分支或唯一性不合法")
+        if transition.get("creates_test_task") and (
+            not test_state
+            or branch != "task"
+            or source == target
+            or states[source] != "started"
+            or states[target] != "started"
+        ):
+            raise Violation(
+                "WORKFLOW_INVALID_CONFIGURATION", "请选择测试初始状态，并在开发中的任务流转路径启用测试创建"
+            )
         if (
             not isinstance(roles, list)
             or not roles

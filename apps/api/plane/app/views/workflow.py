@@ -16,7 +16,7 @@ from plane.services.workflow.configuration import (
     state_options,
     workspace_admin,
 )
-from plane.services.workflow.rules import STATE_FIELDS
+from plane.services.workflow.rules import STATE_FIELDS, OPTIONAL_STATE_FIELDS
 from plane.app.permissions.project import ProjectEntityPermission
 from plane.db.models import Issue, ProjectMember
 from plane.services.workflow.queries import capabilities
@@ -39,7 +39,7 @@ class ProjectWorkflowEndpoint(BaseAPIView):
             else {
                 "enabled": False,
                 "revision": 0,
-                **dict.fromkeys(STATE_FIELDS),
+                **dict.fromkeys((*STATE_FIELDS, *OPTIONAL_STATE_FIELDS)),
                 "transitions": [],
                 "requirements": [],
             }

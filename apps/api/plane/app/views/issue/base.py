@@ -75,6 +75,7 @@ from plane.utils.serializers import writable_data
 from plane.utils.issue_filters import issue_filters
 from plane.utils.order_queryset import order_issue_queryset
 from plane.utils.paginator import GroupedOffsetPaginator, SubGroupedOffsetPaginator
+from plane.services.workflow.project_items import member_scope
 from plane.utils.timezone_converter import user_timezone_converter
 
 from .. import BaseAPIView, BaseViewSet
@@ -94,7 +95,7 @@ class IssueListEndpoint(BaseAPIView):
         issue_ids = [issue_id for issue_id in issue_ids.split(",") if issue_id != ""]
 
         # Base queryset with basic filters
-        queryset = Issue.issue_objects.filter(workspace__slug=slug, project_id=project_id, pk__in=issue_ids)
+        queryset = Issue.project_objects.filter(workspace__slug=slug, project_id=project_id, pk__in=issue_ids)
 
         # Restrict guests without full feature access to issues they created,
         # mirroring IssueViewSet.list.
@@ -220,7 +221,7 @@ class IssueViewSet(BaseViewSet):
         return IssueCreateSerializer if self.action in ["create", "update", "partial_update"] else IssueSerializer
 
     def get_queryset(self):
-        issues = Issue.issue_objects.filter(
+        issues = Issue.project_objects.filter(
             project_id=self.kwargs.get("project_id"),
             workspace__slug=self.kwargs.get("slug"),
         ).distinct()
@@ -279,6 +280,7 @@ class IssueViewSet(BaseViewSet):
         order_by_param = request.GET.get("order_by", "-created_at")
 
         issue_queryset = self.get_queryset()
+        issue_queryset = member_scope(issue_queryset, project, request.user, request.GET.get("work_item_scope"))
 
         # Apply rich filters
         issue_queryset = self.filter_queryset(issue_queryset)
@@ -360,14 +362,7 @@ class IssueViewSet(BaseViewSet):
                         ),
                         group_by_field_name=group_by,
                         sub_group_by_field_name=sub_group_by,
-                        count_filter=Q(
-                            Q(issue_intake__status=1)
-                            | Q(issue_intake__status=-1)
-                            | Q(issue_intake__status=2)
-                            | Q(issue_intake__isnull=True),
-                            archived_at__isnull=True,
-                            is_draft=False,
-                        ),
+                        count_filter=Q(archived_at__isnull=True, is_draft=False),
                     )
             else:
                 # Group paginate
@@ -388,14 +383,7 @@ class IssueViewSet(BaseViewSet):
                         queryset=filtered_issue_queryset,
                     ),
                     group_by_field_name=group_by,
-                    count_filter=Q(
-                        Q(issue_intake__status=1)
-                        | Q(issue_intake__status=-1)
-                        | Q(issue_intake__status=2)
-                        | Q(issue_intake__isnull=True),
-                        archived_at__isnull=True,
-                        is_draft=False,
-                    ),
+                    count_filter=Q(archived_at__isnull=True, is_draft=False),
                 )
         else:
             return self.paginate(
@@ -502,7 +490,8 @@ class IssueViewSet(BaseViewSet):
         project = Project.objects.get(pk=project_id, workspace__slug=slug)
 
         issue = (
-            Issue.formal_objects.filter(
+            Issue.project_objects.get_visible_queryset()
+            .filter(
                 project_id=self.kwargs.get("project_id"),
                 workspace__slug=self.kwargs.get("slug"),
                 pk=pk,
@@ -822,7 +811,7 @@ class IssuePaginatedViewSet(BaseViewSet):
         workspace_slug = self.kwargs.get("slug")
         project_id = self.kwargs.get("project_id")
 
-        issue_queryset = Issue.issue_objects.filter(workspace__slug=workspace_slug, project_id=project_id)
+        issue_queryset = Issue.project_objects.filter(workspace__slug=workspace_slug, project_id=project_id)
 
         return (
             issue_queryset.select_related("state")
@@ -848,7 +837,7 @@ class IssuePaginatedViewSet(BaseViewSet):
             )
             .annotate(
                 sub_issues_count=Subquery(
-                    Issue.issue_objects.filter(parent=OuterRef("id"))
+                    Issue.project_objects.filter(parent=OuterRef("id"))
                     .values("parent")
                     .annotate(count=Count("id"))
                     .values("count")
@@ -905,10 +894,17 @@ class IssuePaginatedViewSet(BaseViewSet):
             required_fields.append("description_html")
 
         # querying issues
-        base_queryset = Issue.issue_objects.filter(workspace__slug=slug, project_id=project_id)
+        base_queryset = member_scope(
+            Issue.project_objects.filter(workspace__slug=slug, project_id=project_id),
+            Project.objects.get(pk=project_id),
+            request.user,
+            request.GET.get("work_item_scope"),
+        )
 
         base_queryset = base_queryset.order_by("updated_at")
-        queryset = self.get_queryset().order_by("updated_at")
+        queryset = member_scope(
+            self.get_queryset(), Project.objects.get(pk=project_id), request.user, request.GET.get("work_item_scope")
+        ).order_by("updated_at")
 
         # validation for guest user
         project = Project.objects.get(pk=project_id, workspace__slug=slug)
@@ -1003,7 +999,7 @@ class IssueDetailEndpoint(BaseAPIView):
                 .values("count")
             )
             .annotate(
-                sub_issues_count=Issue.issue_objects.filter(parent=OuterRef("id"))
+                sub_issues_count=Issue.project_objects.filter(parent=OuterRef("id"))
                 .order_by()
                 .annotate(count=Func(F("id"), function="Count"))
                 .values("count")
@@ -1035,7 +1031,7 @@ class IssueDetailEndpoint(BaseAPIView):
         # check for the project member role, if the role is 5 then check for the guest_view_all_features
         #  if it is true then show all the issues else show only the issues created by the user
         permission_subquery = (
-            Issue.issue_objects.filter(workspace__slug=slug, project_id=project_id, id=OuterRef("id"))
+            Issue.project_objects.filter(workspace__slug=slug, project_id=project_id, id=OuterRef("id"))
             .filter(
                 Q(
                     project__project_projectmember__member=self.request.user,
@@ -1059,8 +1055,12 @@ class IssueDetailEndpoint(BaseAPIView):
             .values("id")
         )
         # Main issue query
-        issue = Issue.issue_objects.filter(workspace__slug=slug, project_id=project_id).filter(
+        issue = Issue.project_objects.filter(workspace__slug=slug, project_id=project_id).filter(
             Exists(permission_subquery)
+        )
+
+        issue = member_scope(
+            issue, Project.objects.get(pk=project_id), request.user, request.GET.get("work_item_scope")
         )
 
         # Add additional prefetch based on expand parameter
@@ -1200,7 +1200,7 @@ class IssueBulkUpdateDateEndpoint(BaseAPIView):
 class IssueMetaEndpoint(BaseAPIView):
     @allow_permission([ROLE.ADMIN, ROLE.MEMBER, ROLE.GUEST], level="PROJECT")
     def get(self, request, slug, project_id, issue_id):
-        issue = Issue.issue_objects.only("sequence_id", "project__identifier").get(
+        issue = Issue.project_objects.only("sequence_id", "project__identifier").get(
             id=issue_id, project_id=project_id, workspace__slug=slug
         )
         return Response(
@@ -1245,7 +1245,8 @@ class IssueDetailIdentifierEndpoint(BaseAPIView):
 
         # Fetch the issue
         issue = (
-            Issue.formal_objects.filter(project_id=project.id)
+            Issue.project_objects.get_visible_queryset()
+            .filter(project_id=project.id)
             .filter(workspace__slug=slug)
             .select_related("workspace", "project", "state", "parent")
             .prefetch_related("assignees", "labels", "issue_module__module")

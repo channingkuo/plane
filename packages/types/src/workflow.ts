@@ -14,12 +14,14 @@ export type TWorkflowTransition = {
   from_state_id: string;
   to_state_id: string;
   roles: number[];
+  creates_test_task?: boolean;
 };
 export type TWorkflowRequirement = { branch: TWorkflowBranch; state_id: string; fields: TWorkflowField[] };
 export type TProjectWorkflow = {
   enabled: boolean;
   revision: number;
   task_initial_state_id: string | null;
+  test_task_initial_state_id?: string | null;
   intake_submission_state_id: string | null;
   intake_acceptance_state_id: string | null;
   requirement_completed_state_id: string | null;

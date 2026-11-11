@@ -19,6 +19,7 @@ class ProjectWorkflow(BaseModel):
     enabled = models.BooleanField(default=False)
     revision = models.PositiveIntegerField(default=0)
     task_initial_state = models.ForeignKey("db.State", on_delete=models.PROTECT, related_name="+", null=True)
+    test_task_initial_state = models.ForeignKey("db.State", on_delete=models.PROTECT, related_name="+", null=True)
     intake_submission_state = models.ForeignKey("db.State", on_delete=models.PROTECT, related_name="+", null=True)
     intake_acceptance_state = models.ForeignKey("db.State", on_delete=models.PROTECT, related_name="+", null=True)
     requirement_completed_state = models.ForeignKey("db.State", on_delete=models.PROTECT, related_name="+", null=True)
@@ -34,6 +35,7 @@ class WorkflowTransition(BaseModel):
     from_state = models.ForeignKey("db.State", on_delete=models.PROTECT, related_name="+")
     to_state = models.ForeignKey("db.State", on_delete=models.PROTECT, related_name="+")
     roles = models.JSONField(default=list)
+    creates_test_task = models.BooleanField(default=False)
 
     class Meta:
         db_table = "workflow_transitions"
@@ -67,6 +69,9 @@ class IssueWorkflowContext(BaseModel):
     children_revision = models.PositiveIntegerField(default=0)
     manual_reopen_revision = models.PositiveIntegerField(null=True)
     blocked_reason = models.JSONField(default=dict)
+    test_source = models.OneToOneField(
+        "db.Issue", on_delete=models.SET_NULL, null=True, related_name="generated_test_context"
+    )
 
     class Meta:
         db_table = "issue_workflow_contexts"

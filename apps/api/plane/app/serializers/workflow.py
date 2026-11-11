@@ -10,6 +10,7 @@ class TransitionSerializer(serializers.Serializer):
     from_state_id = serializers.UUIDField()
     to_state_id = serializers.UUIDField()
     roles = serializers.ListField(child=serializers.ChoiceField(choices=[5, 15, 20]), allow_empty=False)
+    creates_test_task = serializers.BooleanField(required=False, default=False)
 
 
 class RequirementSerializer(serializers.Serializer):
@@ -22,6 +23,7 @@ class WorkflowConfigurationSerializer(serializers.Serializer):
     enabled = serializers.BooleanField()
     revision = serializers.IntegerField(min_value=0)
     task_initial_state_id = serializers.UUIDField()
+    test_task_initial_state_id = serializers.UUIDField(required=False, allow_null=True, default=None)
     intake_submission_state_id = serializers.UUIDField()
     intake_acceptance_state_id = serializers.UUIDField()
     requirement_completed_state_id = serializers.UUIDField()

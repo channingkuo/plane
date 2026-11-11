@@ -116,6 +116,37 @@ class IssueManager(FormalIssueManager):
         )
 
 
+class ProjectIssueManager(SoftDeletionManager):
+    """Project layouts also show pending Intake, without granting acceptance."""
+
+    def pending_intake(self):
+        return Q(
+            project__workflow__enabled=True,
+            workflow_context__origin="intake",
+            workflow_context__accepted_at__isnull=True,
+            state_id=models.F("project__workflow__intake_submission_state_id"),
+            issue_intake__status=-2,
+            issue_intake__deleted_at__isnull=True,
+        )
+
+    def get_visible_queryset(self):
+        """Details retain the existing archive/draft behavior of formal queries."""
+        unaccepted = Q(
+            project__workflow__enabled=True,
+            workflow_context__origin="intake",
+            workflow_context__accepted_at__isnull=True,
+        )
+        return super().get_queryset().filter(~unaccepted | self.pending_intake()).distinct()
+
+    def get_queryset(self):
+        return (
+            self.get_visible_queryset()
+            .filter(~Q(state__group=StateGroup.TRIAGE.value) | self.pending_intake())
+            .filter(archived_at__isnull=True, project__archived_at__isnull=True, is_draft=False)
+            .distinct()
+        )
+
+
 class Issue(ChangeTrackerMixin, ProjectBaseModel):
     TRACKED_FIELDS = ["state_id"]
 
@@ -186,6 +217,7 @@ class Issue(ChangeTrackerMixin, ProjectBaseModel):
 
     issue_objects = IssueManager()
     formal_objects = FormalIssueManager()
+    project_objects = ProjectIssueManager()
 
     class Meta:
         verbose_name = "Issue"

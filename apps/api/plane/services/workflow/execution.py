@@ -316,6 +316,10 @@ def validate_mutation(project, actor, config, before, *, intake_operation=False)
             context = contexts.get(key)
             if context and context.accepted_at and intake.status != 1:
                 raise Violation("WORKFLOW_ACCEPTANCE_IMMUTABLE", "不能清除已发生的评审接收事实")
+        from .test_tasks import create_test_tasks
+
+        if create_test_tasks(project, actor, config, before, after):
+            after = snapshot(project.pk)
         aggregate(project, actor, config, before, after)
 
 

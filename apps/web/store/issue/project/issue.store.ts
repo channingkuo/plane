@@ -4,7 +4,7 @@
  * See the LICENSE file for details.
  */
 
-import { action, makeObservable, runInAction } from "mobx";
+import { action, makeObservable, observable, runInAction } from "mobx";
 // types
 import type {
   TIssue,
@@ -23,6 +23,8 @@ import type { IIssueRootStore } from "../root.store";
 import type { IProjectIssuesFilter } from "./filter.store";
 
 export interface IProjectIssues extends IBaseIssuesStore {
+  workItemScope: "mine" | "all";
+  setWorkItemScope: (scope: "mine" | "all") => void;
   viewFlags: ViewFlags;
   // action
   fetchIssues: (
@@ -53,6 +55,10 @@ export interface IProjectIssues extends IBaseIssuesStore {
 }
 
 export class ProjectIssues extends BaseIssuesStore implements IProjectIssues {
+  workItemScope: "mine" | "all" = "mine";
+  setWorkItemScope = (scope: "mine" | "all") => {
+    this.workItemScope = scope;
+  };
   viewFlags = {
     enableQuickAdd: true,
     enableIssueCreation: true,
@@ -66,6 +72,8 @@ export class ProjectIssues extends BaseIssuesStore implements IProjectIssues {
   constructor(_rootStore: IIssueRootStore, issueFilterStore: IProjectIssuesFilter) {
     super(_rootStore, issueFilterStore);
     makeObservable(this, {
+      workItemScope: observable,
+      setWorkItemScope: action,
       fetchIssues: action,
       fetchNextIssues: action,
       fetchIssuesWithExistingPagination: action,
@@ -83,7 +91,7 @@ export class ProjectIssues extends BaseIssuesStore implements IProjectIssues {
    * @param projectId
    */
   fetchParentStats = async (workspaceSlug: string, projectId?: string) => {
-    projectId && this.rootIssueStore.rootStore.projectRoot.project.fetchProjectDetails(workspaceSlug, projectId);
+    if (projectId) void this.rootIssueStore.rootStore.projectRoot.project.fetchProjectDetails(workspaceSlug, projectId);
   };
 
   /** */
@@ -114,9 +122,14 @@ export class ProjectIssues extends BaseIssuesStore implements IProjectIssues {
       // get params from pagination options
       const params = this.issueFilterStore?.getFilterParams(options, projectId, undefined, undefined, undefined);
       // call the fetch issues API with the params
-      const response = await this.issueService.getIssues(workspaceSlug, projectId, params, {
-        signal: this.controller.signal,
-      });
+      const response = await this.issueService.getIssues(
+        workspaceSlug,
+        projectId,
+        { ...params, work_item_scope: this.workItemScope },
+        {
+          signal: this.controller.signal,
+        }
+      );
 
       // after fetching issues, call the base method to process the response further
       this.onfetchIssues(response, options, workspaceSlug, projectId, undefined, !isExistingPaginationOptions);
@@ -155,7 +168,10 @@ export class ProjectIssues extends BaseIssuesStore implements IProjectIssues {
         subGroupId
       );
       // call the fetch issues API with the params for next page in issues
-      const response = await this.issueService.getIssues(workspaceSlug, projectId, params);
+      const response = await this.issueService.getIssues(workspaceSlug, projectId, {
+        ...params,
+        work_item_scope: this.workItemScope,
+      });
 
       // after the next page of issues are fetched, call the base method to process the response
       this.onfetchNexIssues(response, groupId, subGroupId);

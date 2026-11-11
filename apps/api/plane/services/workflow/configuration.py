@@ -17,7 +17,7 @@ from plane.db.models import (
     IssueWorkflowContext,
     State,
 )
-from .rules import STATE_FIELDS, Violation, validate_configuration, validate_fields
+from .rules import STATE_FIELDS, OPTIONAL_STATE_FIELDS, Violation, validate_configuration, validate_fields
 
 
 class WorkflowError(APIException):
@@ -49,8 +49,13 @@ def configuration(workflow):
     return {
         "enabled": workflow.enabled,
         "revision": workflow.revision,
-        **{key: str(getattr(workflow, key)) if getattr(workflow, key) else None for key in STATE_FIELDS},
-        "transitions": list(workflow.transitions.values("branch", "from_state_id", "to_state_id", "roles")),
+        **{
+            key: str(getattr(workflow, key)) if getattr(workflow, key) else None
+            for key in (*STATE_FIELDS, *OPTIONAL_STATE_FIELDS)
+        },
+        "transitions": list(
+            workflow.transitions.values("branch", "from_state_id", "to_state_id", "roles", "creates_test_task")
+        ),
         "requirements": list(workflow.requirements.values("branch", "state_id", "fields")),
     }
 
@@ -58,7 +63,7 @@ def configuration(workflow):
 def canonical(config):
     """JSON-compatible IDs, shared by persistence, previews and execution."""
     result = dict(config)
-    for key in STATE_FIELDS:
+    for key in (*STATE_FIELDS, *OPTIONAL_STATE_FIELDS):
         result[key] = str(config[key]) if config.get(key) else None
     result["transitions"] = [
         {**t, "from_state_id": str(t["from_state_id"]), "to_state_id": str(t["to_state_id"])}
@@ -172,7 +177,7 @@ def save_configuration(project, user, payload, *, preview=False):
     if preview:
         return {"valid": True, "revision": revision}
     workflow = current or ProjectWorkflow(project=project)
-    for key in STATE_FIELDS:
+    for key in (*STATE_FIELDS, *OPTIONAL_STATE_FIELDS):
         setattr(workflow, key, config[key])
     workflow.enabled = config["enabled"]
     workflow.revision = revision + 1

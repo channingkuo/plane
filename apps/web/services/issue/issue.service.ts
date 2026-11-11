@@ -5,6 +5,7 @@
  */
 
 // plane imports
+import { mutate } from "swr";
 import { API_BASE_URL } from "@plane/constants";
 import { EIssueServiceType } from "@plane/types";
 import type {
@@ -229,6 +230,7 @@ export class IssueService extends APIService {
   async patchIssue(workspaceSlug: string, projectId: string, issueId: string, data: Partial<TIssue>): Promise<any> {
     return this.patch(`/api/workspaces/${workspaceSlug}/projects/${projectId}/${this.serviceType}/${issueId}/`, data)
       .then(async (response) => {
+        void mutate(["project-issue-hierarchy", workspaceSlug, projectId]);
         window.dispatchEvent(
           new CustomEvent("plane:workflow-updated", { detail: { workspaceSlug, projectId, issueId } })
         );

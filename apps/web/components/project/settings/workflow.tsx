@@ -19,6 +19,7 @@ const stateKeys = [
   "intake_acceptance_state_id",
   "requirement_completed_state_id",
   "requirement_reopen_state_id",
+  "test_task_initial_state_id",
 ] as const;
 const fields: TWorkflowField[] = ["assignees", "start_date", "target_date"];
 
@@ -125,7 +126,7 @@ export function ProjectWorkflowSettings({ workspaceSlug, projectId }: { workspac
             <div key={key} className="flex flex-col gap-2">
               <span>{label(key)}</span>
               <StateChoice
-                value={working[key]}
+                value={working[key] ?? null}
                 states={options}
                 label={label(key)}
                 onChange={(value) => update({ [key]: value })}
@@ -191,6 +192,19 @@ export function ProjectWorkflowSettings({ workspaceSlug, projectId }: { workspac
                   })
                 }
               />
+              {rule.branch === "task" && (
+                <Checkbox
+                  label={label("creates_test_task")}
+                  checked={rule.creates_test_task ?? false}
+                  onCheckedChange={(checked) =>
+                    update({
+                      transitions: working.transitions.map((row, i) =>
+                        i === index ? { ...row, creates_test_task: checked } : row
+                      ),
+                    })
+                  }
+                />
+              )}
               {[20, 15, 5].map((role) => (
                 <Checkbox
                   key={role}

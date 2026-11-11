@@ -5,6 +5,7 @@
 from django.urls import path
 from plane.app.views.workflow import ProjectWorkflowEndpoint, ProjectWorkflowValidationEndpoint
 from plane.app.views.workflow import IssueWorkflowEndpoint, WorkflowCreationContextEndpoint
+from plane.app.views.project.overview import ProjectOverviewEndpoint, ProjectIssueHierarchyEndpoint
 
 from plane.app.views import (
     ProjectViewSet,
@@ -24,6 +25,16 @@ from plane.app.views import (
 
 
 urlpatterns = [
+    path(
+        "workspaces/<str:slug>/projects/<uuid:project_id>/overview/",
+        ProjectOverviewEndpoint.as_view(),
+        name="project-overview",
+    ),
+    path(
+        "workspaces/<str:slug>/projects/<uuid:project_id>/issue-hierarchy/",
+        ProjectIssueHierarchyEndpoint.as_view(),
+        name="project-issue-hierarchy",
+    ),
     path(
         "workspaces/<str:slug>/projects/<uuid:project_id>/workflow/creation/",
         WorkflowCreationContextEndpoint.as_view(),

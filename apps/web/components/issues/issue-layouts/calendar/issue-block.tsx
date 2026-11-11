@@ -25,6 +25,7 @@ import { useIssueStoreType } from "@/hooks/use-issue-layout-store";
 import useIssuePeekOverviewRedirection from "@/hooks/use-issue-peek-overview-redirection";
 import { usePlatformOS } from "@/hooks/use-platform-os";
 // local components
+import { IssueIdentifier } from "@/components/issues/issue-detail/issue-identifier";
 import { WorkItemPreviewCard } from "../../preview-card";
 import type { TRenderQuickActions } from "../list/list-view-types";
 import type { CalendarStoreType } from "./base-calendar-root";
@@ -58,7 +59,6 @@ export const CalendarIssueBlock = observer(
     const stateColor = getProjectStates(issue?.project_id)?.find((state) => state?.id == issue?.state_id)?.color || "";
     const projectIdentifier = getProjectIdentifierById(issue?.project_id);
     const showWorkItemKey = issuesFilter?.issueFilters?.displayProperties?.key ?? true;
-    const workItemId = `${projectIdentifier}-${issue.sequence_id}`;
 
     // handlers
     const handleIssuePeekOverview = (peekIssue: TIssue) =>
@@ -134,20 +134,8 @@ export const CalendarIssueBlock = observer(
                         backgroundColor: stateColor,
                       }}
                     />
-                    {showWorkItemKey && projectIdentifier && (
-                      // In a narrow day cell the project key truncates before the sequence number does.
-                      <span
-                        className="flex min-w-0 items-center overflow-hidden text-caption-md-medium whitespace-nowrap text-tertiary"
-                        title={workItemId}
-                      >
-                        <span aria-hidden="true" className="min-w-0 truncate">
-                          {projectIdentifier}-
-                        </span>
-                        <span aria-hidden="true" className="shrink-0 tabular-nums">
-                          {issue.sequence_id}
-                        </span>
-                        <span className="sr-only">{workItemId}</span>
-                      </span>
+                    {showWorkItemKey && issue.project_id && (
+                      <IssueIdentifier issueId={issue.id} projectId={issue.project_id} size="xs" />
                     )}
                     <div className="min-w-0 flex-1 truncate text-caption-md-medium lg:text-body-xs-regular">
                       {issue.name}

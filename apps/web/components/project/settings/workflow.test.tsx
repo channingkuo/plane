@@ -51,6 +51,23 @@ describe("project workflow configuration", () => {
     vi.mocked(workflowService.validate).mockResolvedValue({ valid: true });
   });
 
+  it("persists the test initial state and explicitly selected test-creation path", async () => {
+    vi.mocked(workflowService.configuration).mockResolvedValue({
+      ...structuredClone(initial),
+      test_task_initial_state_id: "doing",
+      transitions: [{ branch: "task", from_state_id: "todo", to_state_id: "doing", roles: [20] }],
+    });
+    mount();
+    expect(await screen.findByRole("combobox", { name: key("test_task_initial_state_id") })).toBeTruthy();
+    fireEvent.click(screen.getByRole("checkbox", { name: key("creates_test_task") }));
+    fireEvent.click(screen.getByRole("button", { name: key("save") }));
+    await waitFor(() => expect(workflowService.save).toHaveBeenCalled());
+    expect(vi.mocked(workflowService.save).mock.calls.at(-1)?.[2]).toMatchObject({
+      test_task_initial_state_id: "doing",
+      transitions: [expect.objectContaining({ creates_test_task: true })],
+    });
+  });
+
   it("saves the entire edited configuration and required administrator paths", async () => {
     mount();
     const enabled = await screen.findByRole("checkbox", { name: key("enabled") });

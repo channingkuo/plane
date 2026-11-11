@@ -160,8 +160,15 @@ def issue_group_values(
     )
 
     if field == "state_id":
-        queryset = State.objects.filter(is_triage=False, workspace__slug=slug, project_id__in=project_ids)
-        return list(queryset.values_list("id", flat=True))
+        from plane.db.models import ProjectWorkflow
+
+        submission_states = ProjectWorkflow.objects.filter(project_id__in=project_ids, enabled=True).values(
+            "intake_submission_state_id"
+        )
+        states = State.all_state_objects.filter(
+            workspace__slug=slug, project_id__in=project_ids, deleted_at__isnull=True
+        ).filter(Q(is_triage=False) | Q(pk__in=submission_states))
+        return list(states.values_list("id", flat=True))
 
     if field == "labels__id":
         queryset = Label.objects.filter(workspace__slug=slug, project_id__in=project_ids).values_list("id", flat=True)

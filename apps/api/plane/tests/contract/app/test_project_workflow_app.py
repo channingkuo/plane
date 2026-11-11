@@ -545,7 +545,7 @@ def test_batch_dates_failure_is_atomic(session_client, workflow_project):
     assert str(first.target_date) == str(second.target_date) == "2026-11-12"
 
 
-def test_non_triage_intake_submission_remains_outside_formal_queries(session_client, workflow_project):
+def test_non_triage_intake_submission_visible_in_project_layouts_only(session_client, workflow_project):
     project, payload = workflow_project
     state = State.objects.create(
         project=project, workspace=project.workspace, name="Awaiting review", group="started", color="#000000"
@@ -571,8 +571,8 @@ def test_non_triage_intake_submission_remains_outside_formal_queries(session_cli
     for suffix in ("issues/", "v2/issues/", "issues-detail/?expand=issue_relation"):
         response = session_client.get(url(project).replace("workflow/", suffix))
         assert response.status_code == 200, response.data
-        assert "Pending" not in json.dumps(response.data, default=str), response.data
-    assert session_client.get(issue_url(project, issue.pk)).status_code == 404
+        assert "Pending" in json.dumps(response.data, default=str), response.data
+    assert session_client.get(issue_url(project, issue.pk)).status_code == 200
     assert session_client.get(issue_url(project, issue.pk) + "issue-relation/").status_code == 404
 
 

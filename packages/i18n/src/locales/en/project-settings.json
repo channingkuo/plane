@@ -571,7 +571,27 @@
       "blocked": "Automatic completion is blocked. Complete the required fields.",
       "transitions_help": "Configure an allowed path and its project roles before changing state. Required fields apply in addition to the path; selecting fields does not create a transition.",
       "no_transitions": "This branch has no transitions. Work items cannot change state until you add a transition and select the allowed roles.",
-      "transition_not_configured": "No transition is configured between these states. Add the path and allowed roles under Project settings → Workflow for the appropriate branch. Filling required fields alone does not allow a transition."
+      "transition_not_configured": "No transition is configured between these states. Add the path and allowed roles under Project settings → Workflow for the appropriate branch. Filling required fields alone does not allow a transition.",
+      "test_task_initial_state_id": "Test task initial state",
+      "creates_test_task": "Create a test subtask when development finishes"
     }
+  },
+  "project_overview": {
+    "title": "Overview",
+    "status_summary": "Work items by status",
+    "total": "{count} work items",
+    "timeline": "Project timeline",
+    "undated": "{count} work items have incomplete dates. They remain listed in the timeline.",
+    "loading": "Loading project overview…",
+    "load_error": "Could not load project overview.",
+    "retry": "Retry",
+    "refresh": "Refresh",
+    "updating": "Updating dates…",
+    "empty": "No work items in this project yet.",
+    "load_more": "Load more work items",
+    "scope": "Work item scope",
+    "my_scope": "My work items and all reviews",
+    "all_scope": "All work items",
+    "update_error": "Could not update dates. Check the workflow requirements and try again."
   }
 }

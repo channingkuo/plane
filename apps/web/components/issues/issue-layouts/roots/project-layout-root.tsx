@@ -5,10 +5,15 @@
  */
 
 import { observer } from "mobx-react";
+import { useEffect } from "react";
 import { useParams } from "next/navigation";
 import useSWR from "swr";
 // plane constants
 import { ISSUE_DISPLAY_FILTERS_BY_PAGE } from "@plane/constants";
+import { EUserPermissions } from "@plane/constants";
+import { useTranslation } from "@plane/i18n";
+import { useUserPermissions } from "@/hooks/store/user";
+import { Select, SelectContent, SelectItem, SelectList, SelectTrigger } from "@makeplane/propel/components/select";
 import { EIssueLayoutTypes, EIssuesStoreType } from "@plane/types";
 import { Spinner } from "@plane/blocks/spinner";
 // components
@@ -49,6 +54,25 @@ export const ProjectLayoutRoot = observer(function ProjectLayoutRoot() {
   const projectId = routerProjectId ? routerProjectId.toString() : undefined;
   // hooks
   const { issues, issuesFilter } = useIssues(EIssuesStoreType.PROJECT);
+  const { t } = useTranslation();
+  const { workspaceProjectsPermissions } = useUserPermissions();
+  const isMember =
+    !!workspaceSlug &&
+    !!projectId &&
+    workspaceProjectsPermissions[workspaceSlug]?.[projectId] === EUserPermissions.MEMBER;
+  useEffect(() => {
+    const refresh = (event: Event) => {
+      const detail = (event as CustomEvent<{ workspaceSlug: string; projectId: string }>).detail;
+      if (detail?.workspaceSlug === workspaceSlug && detail?.projectId === projectId && workspaceSlug && projectId) {
+        void issues.fetchIssuesWithExistingPagination(workspaceSlug, projectId, "mutation");
+      }
+    };
+    window.addEventListener("plane:workflow-updated", refresh);
+    return () => {
+      window.removeEventListener("plane:workflow-updated", refresh);
+      issues.setWorkItemScope("mine");
+    };
+  }, [issues, workspaceSlug, projectId]);
   // derived values
   const workItemFilters = projectId ? issuesFilter?.getIssueFilters(projectId) : undefined;
   const activeLayout = workItemFilters?.displayFilters?.layout;
@@ -78,6 +102,30 @@ export const ProjectLayoutRoot = observer(function ProjectLayoutRoot() {
       >
         {({ filter: projectWorkItemsFilter }) => (
           <div className="relative flex h-full w-full flex-col overflow-hidden">
+            {isMember && (
+              <div className="border-b border-subtle px-4 py-2">
+                <Select
+                  items={[
+                    { value: "mine", label: t("project_overview.my_scope") },
+                    { value: "all", label: t("project_overview.all_scope") },
+                  ]}
+                  value={issues.workItemScope}
+                  onValueChange={(value) => {
+                    if (value !== "mine" && value !== "all") return;
+                    issues.setWorkItemScope(value);
+                    void issues.fetchIssuesWithExistingPagination(workspaceSlug, projectId, "mutation");
+                  }}
+                >
+                  <SelectTrigger size="md" aria-label={t("project_overview.scope")} />
+                  <SelectContent>
+                    <SelectList>
+                      <SelectItem value="mine" label={t("project_overview.my_scope")} />
+                      <SelectItem value="all" label={t("project_overview.all_scope")} />
+                    </SelectList>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             {projectWorkItemsFilter && <WorkItemFiltersRow filter={projectWorkItemsFilter} />}
             <div className="relative h-full w-full overflow-auto bg-surface-1">
               {/* mutation loader */}

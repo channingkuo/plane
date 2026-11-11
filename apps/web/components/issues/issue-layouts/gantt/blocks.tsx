@@ -10,7 +10,7 @@ import { useParams } from "next/navigation";
 import { Popover, PopoverContent, PopoverTrigger } from "@makeplane/propel/components/popover";
 import { Tooltip } from "@makeplane/propel/components/tooltip";
 import { ControlLink } from "@plane/blocks/layout";
-import { findTotalDaysInRange, generateWorkItemLink } from "@plane/utils";
+import { generateWorkItemLink } from "@plane/utils";
 // components
 import { SIDEBAR_WIDTH } from "@/components/gantt-chart/constants";
 import { IssueIdentifier } from "@/components/issues/issue-detail/issue-identifier";
@@ -54,8 +54,6 @@ export const IssueGanttBlock = observer(function IssueGanttBlock(props: Props) {
   const { blockStyle } = getBlockViewDetails(issueDetails, stateDetails?.color ?? "");
 
   const handleIssuePeekOverview = () => handleRedirection(workspaceSlug, issueDetails, isMobile);
-
-  const duration = findTotalDaysInRange(issueDetails?.start_date, issueDetails?.target_date) || 0;
 
   return (
     <Popover>
@@ -137,21 +135,23 @@ export const IssueGanttSidebarBlock = observer(function IssueGanttSidebarBlock(p
       id={`issue-${issueId}`}
       href={workItemLink}
       onClick={handleIssuePeekOverview}
-      className="line-clamp-1 w-full cursor-pointer text-body-xs-regular text-primary"
+      className="block w-full min-w-0 cursor-pointer text-body-xs-regular text-primary"
       disabled={!!issueDetails?.tempId}
     >
-      <div className="relative flex h-full w-full cursor-pointer items-center gap-2">
+      <div className="relative flex h-full w-full min-w-0 cursor-pointer flex-col justify-center gap-0.5">
         {issueDetails?.project_id && (
-          <IssueIdentifier
-            issueId={issueDetails.id}
-            projectId={issueDetails.project_id}
-            size="xs"
-            variant="tertiary"
-            displayProperties={issuesFilter?.issueFilters?.displayProperties}
-          />
+          <div className="w-full overflow-x-auto">
+            <IssueIdentifier
+              issueId={issueDetails.id}
+              projectId={issueDetails.project_id}
+              size="xs"
+              variant="tertiary"
+              displayProperties={issuesFilter?.issueFilters?.displayProperties}
+            />
+          </div>
         )}
         <Tooltip label={issueDetails?.name ?? ""} layout="stacked" disabled={isMobile}>
-          <span className="flex-grow truncate text-body-xs-medium">{issueDetails?.name}</span>
+          <span className="block w-full truncate text-body-xs-medium">{issueDetails?.name}</span>
         </Tooltip>
       </div>
     </ControlLink>

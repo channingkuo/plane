@@ -90,6 +90,15 @@ class StateViewSet(BaseViewSet):
     @allow_permission([ROLE.ADMIN, ROLE.MEMBER, ROLE.GUEST])
     def list(self, request, slug, project_id):
         states = StateSerializer(self.get_queryset(), many=True).data
+        from plane.db.models import ProjectWorkflow
+
+        workflow = ProjectWorkflow.objects.filter(project_id=project_id, enabled=True).first()
+        if workflow and str(workflow.intake_submission_state_id) not in {str(state["id"]) for state in states}:
+            submission = State.all_state_objects.filter(
+                pk=workflow.intake_submission_state_id, project_id=project_id, deleted_at__isnull=True
+            ).first()
+            if submission:
+                states.append(StateSerializer(submission).data)
 
         grouped_states = defaultdict(list)
         for state in states:

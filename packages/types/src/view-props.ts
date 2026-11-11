@@ -61,6 +61,7 @@ export type TIssueGroupingFilters = "active" | "backlog";
 export type TIssueExtraOptions = "show_empty_groups" | "sub_issue";
 
 export type TIssueParams =
+  | "work_item_scope"
   | "priority"
   | "state_group"
   | "state"
