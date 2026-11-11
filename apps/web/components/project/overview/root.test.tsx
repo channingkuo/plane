@@ -20,7 +20,25 @@ vi.mock("@plane/i18n", () => ({
 vi.mock("@/hooks/use-timeline-chart", () => ({ useTimeLineChart: () => ({ initGantt }) }));
 vi.mock("@/services/project-overview.service", () => ({ projectOverviewService: { overview: vi.fn() } }));
 vi.mock("@/components/gantt-chart/root", () => ({
-  GanttChartRoot: ({ blockIds }: { blockIds: string[] }) => <div data-testid="timeline-ids">{blockIds.join(",")}</div>,
+  GanttChartRoot: ({
+    blockIds,
+    sidebarToRender,
+  }: {
+    blockIds: string[];
+    sidebarToRender: (props: unknown) => React.ReactNode;
+  }) => (
+    <>
+      <div data-testid="timeline-ids">{blockIds.join(",")}</div>
+      {sidebarToRender({ blockIds })}
+    </>
+  ),
+}));
+vi.mock("@/components/gantt-chart/sidebar/issues/sidebar", () => ({
+  IssueGanttSidebar: ({ blockIds, showAllBlocks }: { blockIds: string[]; showAllBlocks: boolean }) => (
+    <div data-testid="timeline-sidebar" data-show-all-blocks={showAllBlocks}>
+      {blockIds.join(",")}
+    </div>
+  ),
 }));
 vi.mock("@/components/issues/peek-overview", () => ({ IssuePeekOverview: () => null }));
 vi.mock("@/components/issues/issue-layouts/gantt/blocks", () => ({
@@ -64,6 +82,8 @@ describe("project overview", () => {
     expect(screen.getByLabelText("自定义状态: 1")).toBeTruthy();
     expect(screen.getByText("project_overview.undated 1")).toBeTruthy();
     await waitFor(() => expect(screen.getByTestId("timeline-ids").textContent).toBe("undated"));
+    expect(screen.getByTestId("timeline-sidebar").textContent).toBe("undated");
+    expect(screen.getByTestId("timeline-sidebar").getAttribute("data-show-all-blocks")).toBe("true");
     expect(mocks.getIssues).toHaveBeenCalledWith(
       "workspace",
       "project",

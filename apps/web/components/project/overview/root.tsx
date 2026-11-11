@@ -19,8 +19,8 @@ import { StoreContext } from "@/lib/store-context";
 import { useTimeLineChart } from "@/hooks/use-timeline-chart";
 import { TimeLineTypeContext } from "@/components/gantt-chart/contexts";
 import { GanttChartRoot } from "@/components/gantt-chart/root";
-import { BLOCK_HEIGHT } from "@/components/gantt-chart/constants";
-import { IssueGanttBlock, IssueGanttSidebarBlock } from "@/components/issues/issue-layouts/gantt/blocks";
+import { IssueGanttSidebar } from "@/components/gantt-chart/sidebar/issues/sidebar";
+import { IssueGanttBlock } from "@/components/issues/issue-layouts/gantt/blocks";
 import { ProjectOverviewSummary } from "./summary";
 import { IssuePeekOverview } from "@/components/issues/peek-overview";
 
@@ -152,15 +152,7 @@ export const ProjectOverview = observer(function ProjectOverview({
                 void update(row.id, { start_date: patch.start_date, target_date: patch.target_date })
               }
               blockToRender={(row: TIssue) => <IssueGanttBlock issueId={row.id} />}
-              sidebarToRender={() => (
-                <div>
-                  {ids.map((id) => (
-                    <div key={id} className="flex items-center px-3" style={{ height: BLOCK_HEIGHT }}>
-                      <IssueGanttSidebarBlock issueId={id} />
-                    </div>
-                  ))}
-                </div>
-              )}
+              sidebarToRender={(props) => <IssueGanttSidebar {...props} showAllBlocks />}
               enableBlockLeftResize={!updating}
               enableBlockRightResize={!updating}
               enableBlockMove={!updating}

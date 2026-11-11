@@ -6,6 +6,7 @@
 
 import { observer } from "mobx-react";
 // plane imports
+import { useTranslation } from "@plane/i18n";
 import type { IGanttBlock } from "@plane/types";
 import { Row } from "@plane/blocks/layout";
 import { cn } from "@plane/utils";
@@ -21,6 +22,7 @@ import { BLOCK_HEIGHT, GANTT_SELECT_GROUP } from "../../constants";
 
 type Props = {
   block: IGanttBlock;
+  rowIndex: number;
   enableSelection: boolean;
   isDragging: boolean;
   selectionHelpers?: TSelectionHelper;
@@ -28,7 +30,8 @@ type Props = {
 };
 
 export const IssuesSidebarBlock = observer(function IssuesSidebarBlock(props: Props) {
-  const { block, enableSelection, isDragging, selectionHelpers, isEpic = false } = props;
+  const { block, rowIndex, enableSelection, isDragging, selectionHelpers, isEpic = false } = props;
+  const { t } = useTranslation();
   // store hooks
   const { updateActiveBlockId, isBlockActive, getNumberOfDaysFromPosition } = useTimeLineChartStore();
   const { getIsIssuePeeked } = useIssueDetail();
@@ -44,7 +47,7 @@ export const IssuesSidebarBlock = observer(function IssuesSidebarBlock(props: Pr
 
   return (
     <div
-      className={cn("group/list-block", {
+      className={cn("group/list-block", rowIndex % 2 === 0 ? "bg-surface-1" : "bg-layer-1", {
         "rounded-sm bg-layer-1": isDragging,
         "rounded-l-sm border border-r-0 border-accent-strong": getIsIssuePeeked(block.data.id),
         "border border-r-0 border-strong-1": isIssueFocused,
@@ -84,11 +87,9 @@ export const IssuesSidebarBlock = observer(function IssuesSidebarBlock(props: Pr
           <div className="flex-grow truncate">
             <IssueGanttSidebarBlock issueId={block.data.id} isEpic={isEpic} />
           </div>
-          {duration && (
+          {duration !== undefined && (
             <div className="flex-shrink-0 text-body-xs-regular text-secondary">
-              <span>
-                {duration} day{duration > 1 ? "s" : ""}
-              </span>
+              <span>{t("workspace_projects.common.days_count", { days: duration })}</span>
             </div>
           )}
         </div>

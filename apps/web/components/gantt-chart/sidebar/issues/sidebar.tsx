@@ -105,6 +105,7 @@ export const IssueGanttSidebar = observer(function IssueGanttSidebar(props: Prop
                   {(isDragging: boolean) => (
                     <IssuesSidebarBlock
                       block={block}
+                      rowIndex={index}
                       enableSelection={enableSelection}
                       isDragging={isDragging}
                       selectionHelpers={selectionHelpers}
