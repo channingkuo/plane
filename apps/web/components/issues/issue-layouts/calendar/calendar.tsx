@@ -8,6 +8,7 @@ import { useEffect, useRef, useState } from "react";
 import { combine } from "@atlaskit/pragmatic-drag-and-drop/combine";
 import { autoScrollForElements } from "@atlaskit/pragmatic-drag-and-drop-auto-scroll/element";
 import { observer } from "mobx-react";
+import { getIssueLayoutViewFlags } from "../creation-policy";
 // plane constants
 import type { TSupportedFilterTypeForUpdate } from "@plane/constants";
 // types
@@ -103,7 +104,7 @@ export const CalendarChart = observer(function CalendarChart(props: Props) {
 
   const [windowWidth] = useSize();
 
-  const { enableIssueCreation, enableQuickAdd } = viewFlags || {};
+  const { enableIssueCreation, enableQuickAdd } = getIssueLayoutViewFlags(viewFlags);
 
   const calendarPayload = issueCalendarView.calendarPayload;
 
@@ -154,13 +155,13 @@ export const CalendarChart = observer(function CalendarChart(props: Props) {
               {layout === "month" && (
                 <div className="grid h-full w-full grid-cols-1 divide-y-[0.5px] divide-subtle-1">
                   {allWeeksOfActiveMonth &&
-                    Object.values(allWeeksOfActiveMonth).map((week: ICalendarWeek, weekIndex) => (
+                    Object.values(allWeeksOfActiveMonth).map((week: ICalendarWeek) => (
                       <CalendarWeekDays
                         selectedDate={selectedDate}
                         setSelectedDate={setSelectedDate}
                         handleDragAndDrop={handleDragAndDrop}
                         issuesFilterStore={issuesFilterStore}
-                        key={weekIndex}
+                        key={Object.keys(week)[0]}
                         week={week}
                         issues={issues}
                         groupedIssueIds={groupedIssueIds}

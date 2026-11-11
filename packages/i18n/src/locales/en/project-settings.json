@@ -568,7 +568,10 @@
       "cancel": "Cancel",
       "required": "Required",
       "progress": "Requirement progress",
-      "blocked": "Automatic completion is blocked. Complete the required fields."
+      "blocked": "Automatic completion is blocked. Complete the required fields.",
+      "transitions_help": "Configure an allowed path and its project roles before changing state. Required fields apply in addition to the path; selecting fields does not create a transition.",
+      "no_transitions": "This branch has no transitions. Work items cannot change state until you add a transition and select the allowed roles.",
+      "transition_not_configured": "No transition is configured between these states. Add the path and allowed roles under Project settings → Workflow for the appropriate branch. Filling required fields alone does not allow a transition."
     }
   }
 }

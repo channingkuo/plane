@@ -5,6 +5,7 @@
  */
 
 import { useTranslation } from "@plane/i18n";
+import { getWorkflowErrorMessage } from "@/services/workflow-errors";
 import { workflowService } from "@/services/workflow.service";
 import { requestWorkflowFields } from "@/components/dropdowns/state/workflow-fields-host";
 import { useProjectState } from "./store/use-project-state";
@@ -92,7 +93,10 @@ export const useGroupIssuesDragNDrop = (
           return;
         }
         if (data.state_id !== getIssueById(issueId)?.state_id && (!target || !target.allowed)) {
-          throw target?.reason ?? { message: t("project_settings.workflow.save_error") };
+          if (!target || target.reason?.code === "WORKFLOW_TRANSITION_NOT_ALLOWED") {
+            throw { message: t("project_settings.workflow.transition_not_configured") };
+          }
+          throw target.reason ?? { message: t("project_settings.workflow.save_error") };
         }
       }
     }
@@ -154,7 +158,7 @@ export const useGroupIssuesDragNDrop = (
       setToast({
         title: "Error!",
         type: "error",
-        message: err?.message ?? err?.detail ?? "Failed to perform this action",
+        message: getWorkflowErrorMessage(err, t),
       });
     });
   };

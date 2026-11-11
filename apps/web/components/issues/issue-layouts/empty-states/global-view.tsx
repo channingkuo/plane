@@ -9,7 +9,7 @@ import { observer } from "mobx-react";
 import { EUserPermissionsLevel } from "@plane/constants";
 import { useTranslation } from "@plane/i18n";
 import { EmptyStateDetailed } from "@plane/blocks/empty-state";
-import { EIssuesStoreType, EUserWorkspaceRoles } from "@plane/types";
+import { EUserWorkspaceRoles } from "@plane/types";
 // hooks
 import { useCommandPalette } from "@/hooks/store/use-command-palette";
 import { useProject } from "@/hooks/store/use-project";
@@ -20,7 +20,7 @@ export const GlobalViewEmptyState = observer(function GlobalViewEmptyState() {
   const { t } = useTranslation();
   // store hooks
   const { workspaceProjectIds } = useProject();
-  const { toggleCreateIssueModal, toggleCreateProjectModal } = useCommandPalette();
+  const { toggleCreateProjectModal } = useCommandPalette();
   const { allowPermissions } = useUserPermissions();
   // derived values
   const hasMemberLevelPermission = allowPermissions(
@@ -55,16 +55,7 @@ export const GlobalViewEmptyState = observer(function GlobalViewEmptyState() {
       description={t(`workspace_empty_state.views.description`)}
       assetKey="project"
       assetClassName="size-40"
-      actions={[
-        {
-          label: t(`workspace_empty_state.views.cta_primary`),
-          onClick: () => {
-            toggleCreateIssueModal(true, EIssuesStoreType.PROJECT);
-          },
-          disabled: !hasMemberLevelPermission,
-          variant: "primary",
-        },
-      ]}
+      actions={[]}
     />
   );
 });

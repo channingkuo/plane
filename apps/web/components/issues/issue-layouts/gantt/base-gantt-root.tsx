@@ -6,6 +6,7 @@
 
 import React, { useCallback, useEffect } from "react";
 import { observer } from "mobx-react";
+import { getIssueLayoutViewFlags } from "../creation-policy";
 import { useParams } from "next/navigation";
 // plane imports
 import { ALL_ISSUES, EUserPermissions, EUserPermissionsLevel } from "@plane/constants";
@@ -69,12 +70,12 @@ export const BaseGanttRoot = observer(function BaseGanttRoot(props: IBaseGanttRo
 
   useEffect(() => {
     initGantt();
-  }, []);
+  }, [initGantt]);
 
   const issuesIds = (issues.groupedIssueIds?.[ALL_ISSUES] as string[]) ?? [];
   const nextPageResults = issues.getPaginationData(undefined, undefined)?.nextPageResults;
 
-  const { enableIssueCreation } = issues?.viewFlags || {};
+  const { enableIssueCreation } = getIssueLayoutViewFlags(issues?.viewFlags);
 
   const loadMoreIssues = useCallback(() => {
     fetchNextIssues();
@@ -86,7 +87,7 @@ export const BaseGanttRoot = observer(function BaseGanttRoot(props: IBaseGanttRo
     const payload: any = { ...data };
     if (data.sort_order) payload.sort_order = data.sort_order.newSortOrder;
 
-    updateIssue && (await updateIssue(issue.project_id, issue.id, payload));
+    if (updateIssue) await updateIssue(issue.project_id, issue.id, payload);
   };
 
   const isAllowed = allowPermissions([EUserPermissions.ADMIN, EUserPermissions.MEMBER], EUserPermissionsLevel.PROJECT);
@@ -105,7 +106,7 @@ export const BaseGanttRoot = observer(function BaseGanttRoot(props: IBaseGanttRo
           message: "Error while updating work item dates, Please try again Later",
         });
       }),
-    [issues, projectId, workspaceSlug]
+    [issues, projectId, workspaceSlug, t]
   );
 
   const quickAdd =
@@ -134,12 +135,12 @@ export const BaseGanttRoot = observer(function BaseGanttRoot(props: IBaseGanttRo
             blockIds={issuesIds}
             blockUpdateHandler={updateIssueBlockStructure}
             blockToRender={(data: TIssue) => <IssueGanttBlock issueId={data.id} isEpic={isEpic} />}
-            sidebarToRender={(props) => <IssueGanttSidebar {...props} showAllBlocks isEpic={isEpic} />}
+            sidebarToRender={(sidebarProps) => <IssueGanttSidebar {...sidebarProps} showAllBlocks isEpic={isEpic} />}
             enableBlockLeftResize={isAllowed}
             enableBlockRightResize={isAllowed}
             enableBlockMove={isAllowed}
             enableReorder={appliedDisplayFilters?.order_by === "sort_order" && isAllowed}
-            enableAddBlock={isAllowed}
+            enableAddBlock={enableIssueCreation && isAllowed && !isCompletedCycle}
             enableSelection={isBulkOperationsEnabled && isAllowed}
             quickAdd={quickAdd}
             loadMoreBlocks={loadMoreIssues}

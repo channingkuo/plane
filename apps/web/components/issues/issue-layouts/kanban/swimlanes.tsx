@@ -40,6 +40,7 @@ import { HeaderGroupByCard } from "./headers/group-by-card";
 import { HeaderSubGroupByCard } from "./headers/sub-group-by-card";
 
 interface ISubGroupSwimlaneHeader {
+  disableIssueCreation?: boolean;
   collapsedGroups: TIssueKanbanFilters;
   group_by: TIssueGroupByOptions | undefined;
   getGroupIssueCount: (
@@ -67,6 +68,7 @@ const visibilitySubGroupByGroupCount = (subGroupIssueCount: number, showEmptyGro
 };
 
 const SubGroupSwimlaneHeader = observer(function SubGroupSwimlaneHeader({
+  disableIssueCreation,
   collapsedGroups,
   getGroupIssueCount,
   group_by,
@@ -101,7 +103,7 @@ const SubGroupSwimlaneHeader = observer(function SubGroupSwimlaneHeader({
               collapsedGroups={collapsedGroups}
               handleCollapsedGroups={handleCollapsedGroups}
               issuePayload={_list.payload}
-              disableIssueCreation={getIsWorkflowWorkItemCreationDisabled(_list.id)}
+              disableIssueCreation={disableIssueCreation || getIsWorkflowWorkItemCreationDisabled(_list.id)}
               isEpic={isEpic}
             />
           );
@@ -406,6 +408,7 @@ export const KanBanSwimLanes = observer(function KanBanSwimLanes(props: IKanBanS
     <div className="relative" {...{ [KANBAN_SWIMLANES_ATTRIBUTE]: "" }}>
       <Row className="sticky top-0 z-[4] bg-surface-1 pt-2">
         <SubGroupSwimlaneHeader
+          disableIssueCreation={disableIssueCreation}
           getGroupIssueCount={getGroupIssueCount}
           group_by={group_by}
           sub_group_by={sub_group_by}

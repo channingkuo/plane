@@ -9,6 +9,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { combine } from "@atlaskit/pragmatic-drag-and-drop/combine";
 import { autoScrollForElements } from "@atlaskit/pragmatic-drag-and-drop-auto-scroll/element";
 import { observer } from "mobx-react";
+import { getIssueLayoutViewFlags } from "../creation-policy";
 import { useParams } from "next/navigation";
 import { EIssueFilterType, EUserPermissions, EUserPermissionsLevel } from "@plane/constants";
 import type { EIssuesStoreType } from "@plane/types";
@@ -110,7 +111,7 @@ export const BaseKanBanRoot = observer(function BaseKanBanRoot(props: IBaseKanBa
 
   const KanBanView = sub_group_by ? KanBanSwimLanes : KanBan;
 
-  const { enableInlineEditing, enableQuickAdd, enableIssueCreation } = issues?.viewFlags || {};
+  const { enableInlineEditing, enableQuickAdd, enableIssueCreation } = getIssueLayoutViewFlags(issues?.viewFlags);
 
   const scrollableContainerRef = useRef<HTMLDivElement | null>(null);
 

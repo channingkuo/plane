@@ -5,7 +5,7 @@
  */
 
 import { API_BASE_URL } from "@plane/constants";
-import type { TIssueWorkflow, TProjectWorkflow, TWorkflowField } from "@plane/types";
+import type { TIssueWorkflow, TProjectWorkflow, TWorkflowCreationContext } from "@plane/types";
 import { APIService } from "./api.service";
 
 export class WorkflowService extends APIService {
@@ -30,10 +30,7 @@ export class WorkflowService extends APIService {
   async preview(slug: string, projectId: string, issueId: string, patch: object): Promise<TIssueWorkflow> {
     return (await this.post(`${this.path(slug, projectId)}issues/${issueId}/workflow/preview/`, patch)).data;
   }
-  async creation(
-    slug: string,
-    projectId: string
-  ): Promise<{ enabled: boolean; initial_state_id?: string; fields?: TWorkflowField[] }> {
+  async creation(slug: string, projectId: string): Promise<TWorkflowCreationContext> {
     return (await this.get(`${this.path(slug, projectId)}workflow/creation/`)).data;
   }
 }

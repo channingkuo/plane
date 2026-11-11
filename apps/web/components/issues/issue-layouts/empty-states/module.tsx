@@ -17,7 +17,6 @@ import { EIssuesStoreType, EUserProjectRoles } from "@plane/types";
 // components
 import { ExistingIssuesListModal } from "@/components/core/modals/existing-issues-list-modal";
 // hooks
-import { useCommandPalette } from "@/hooks/store/use-command-palette";
 import { useIssues } from "@/hooks/store/use-issues";
 import { useUserPermissions } from "@/hooks/store/user";
 import { useWorkItemFilterInstance } from "@/hooks/store/work-item-filters/use-work-item-filter-instance";
@@ -34,7 +33,6 @@ export const ModuleEmptyState = observer(function ModuleEmptyState() {
   const { t } = useTranslation();
   // store hooks
   const { issues } = useIssues(EIssuesStoreType.MODULE);
-  const { toggleCreateIssueModal } = useCommandPalette();
   const { allowPermissions } = useUserPermissions();
   // derived values
   const moduleWorkItemFilter = useWorkItemFilterInstance(EIssuesStoreType.MODULE, moduleId);
@@ -96,14 +94,6 @@ export const ModuleEmptyState = observer(function ModuleEmptyState() {
             title={t("project_empty_state.module_work_items.title")}
             description={t("project_empty_state.module_work_items.description")}
             actions={[
-              {
-                label: t("project_empty_state.module_work_items.cta_primary"),
-                onClick: () => {
-                  toggleCreateIssueModal(true, EIssuesStoreType.MODULE);
-                },
-                disabled: !canPerformEmptyStateActions,
-                variant: "primary",
-              },
               {
                 label: t("project_empty_state.module_work_items.cta_secondary"),
                 onClick: () => setModuleIssuesListModal(true),

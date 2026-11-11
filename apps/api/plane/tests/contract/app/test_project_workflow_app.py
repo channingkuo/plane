@@ -173,11 +173,12 @@ def test_final_fields_and_failed_m2m_update_roll_back(session_client, workflow_p
     assert task.issue_assignee.filter(deleted_at__isnull=True).count() == 1
 
 
-def test_intake_acceptance_on_same_issue_and_admin_boundary(session_client, workflow_project, create_user):
+@pytest.mark.parametrize("route", ["intake-issues", "inbox-issues"])
+def test_intake_acceptance_on_same_issue_and_admin_boundary(session_client, workflow_project, create_user, route):
     project, payload = workflow_project
     Intake.objects.create(project=project, workspace=project.workspace, name="Intake", is_default=True)
     enable(session_client, project, payload)
-    intake_url = url(project).replace("workflow/", "intake-issues/")
+    intake_url = url(project).replace("workflow/", f"{route}/")
     result = session_client.post(intake_url, {"issue": {"name": "Requirement"}}, format="json")
     assert result.status_code in (200, 201), result.data
     issue = Issue.objects.get(project=project, name="Requirement")
@@ -908,3 +909,52 @@ def test_batch_unsupported_and_foreign_ids_are_rejected_without_writes(session_c
     assert foreign.status_code == 400, foreign.data
     task.refresh_from_db()
     assert task.priority == "none"
+
+
+@pytest.mark.parametrize("route", ["intake-issues", "inbox-issues"])
+def test_intake_submission_fields_and_creation_context(session_client, workflow_project, create_user, route):
+    project, payload = workflow_project
+    pending = State.objects.create(
+        name="Pending review", group="backlog", project=project, workspace=project.workspace, color="#456789"
+    )
+    payload["intake_submission_state_id"] = str(pending.pk)
+    payload["requirements"] = [
+        {"branch": "requirement", "state_id": str(pending.pk), "fields": ["assignees", "start_date", "target_date"]},
+        {"branch": "task", "state_id": payload["task_initial_state_id"], "fields": ["assignees"]},
+    ]
+    Intake.objects.create(project=project, workspace=project.workspace, name="Intake", is_default=True)
+    enable(session_client, project, payload)
+    context = session_client.get(url(project) + "creation/")
+    assert context.status_code == 200, context.data
+    assert str(context.data["intake"]["state"]["id"]) == str(pending.pk)
+    assert context.data["intake"]["state"]["name"] == "Pending review"
+    assert context.data["intake"]["fields"] == ["assignees", "start_date", "target_date"]
+    assert context.data["fields"] == ["assignees"]
+    assert "transitions" not in context.data
+    intake_url = url(project).replace("workflow/", f"{route}/")
+    failure = session_client.post(intake_url, {"issue": {"name": "Missing fields"}}, format="json")
+    assert failure.status_code == 400, failure.data
+    assert failure.data["code"] == "WORKFLOW_REQUIRED_FIELDS_MISSING"
+    assert set(failure.data["details"]["fields"]) == {"assignees", "start_date", "target_date"}
+    assert not Issue.objects.filter(project=project).exists()
+    assert not IntakeIssue.objects.filter(project=project).exists()
+    result = session_client.post(
+        intake_url,
+        {
+            "issue": {
+                "name": "Valid submission",
+                "state_id": payload["task_initial_state_id"],
+                "assignee_ids": [str(create_user.pk)],
+                "start_date": "2026-11-10",
+                "target_date": "2026-11-12",
+            }
+        },
+        format="json",
+    )
+    assert result.status_code in (200, 201), result.data
+    issue = Issue.objects.get(project=project, name="Valid submission")
+    assert issue.state_id == pending.pk
+    assert str(issue.start_date) == "2026-11-10"
+    assert issue.workflow_context.origin == "intake"
+    assert issue.workflow_context.accepted_at is None
+    assert IntakeIssue.objects.get(issue=issue).status == -2

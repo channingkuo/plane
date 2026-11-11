@@ -7,6 +7,7 @@
 import type { FC } from "react";
 import { useCallback, useEffect } from "react";
 import { observer } from "mobx-react";
+import { getIssueLayoutViewFlags } from "../creation-policy";
 import { useParams } from "next/navigation";
 // plane imports
 import { ALL_ISSUES, EIssueFilterType, EUserPermissions, EUserPermissionsLevel } from "@plane/constants";
@@ -59,7 +60,7 @@ export const BaseSpreadsheetRoot = observer(function BaseSpreadsheetRoot(props: 
     updateFilters,
   } = useIssuesActions(storeType);
   // derived values
-  const { enableInlineEditing, enableQuickAdd, enableIssueCreation } = issues?.viewFlags || {};
+  const { enableInlineEditing, enableQuickAdd, enableIssueCreation } = getIssueLayoutViewFlags(issues?.viewFlags);
   // user role validation
   const isEditingAllowed = allowPermissions(
     [EUserPermissions.ADMIN, EUserPermissions.MEMBER],
@@ -71,9 +72,11 @@ export const BaseSpreadsheetRoot = observer(function BaseSpreadsheetRoot(props: 
   }, [fetchIssues, storeType, viewId]);
 
   const canEditProperties = useCallback(
-    (projectId: string | undefined) => {
+    (issueProjectId: string | undefined) => {
       const isEditingAllowedBasedOnProject =
-        canEditPropertiesBasedOnProject && projectId ? canEditPropertiesBasedOnProject(projectId) : isEditingAllowed;
+        canEditPropertiesBasedOnProject && issueProjectId
+          ? canEditPropertiesBasedOnProject(issueProjectId)
+          : isEditingAllowed;
 
       return enableInlineEditing && isEditingAllowedBasedOnProject;
     },
@@ -115,7 +118,16 @@ export const BaseSpreadsheetRoot = observer(function BaseSpreadsheetRoot(props: 
         placements={placement}
       />
     ),
-    [isCompletedCycle, canEditProperties, removeIssue, updateIssue, removeIssueFromView, archiveIssue, restoreIssue]
+    [
+      QuickActions,
+      isCompletedCycle,
+      canEditProperties,
+      removeIssue,
+      updateIssue,
+      removeIssueFromView,
+      archiveIssue,
+      restoreIssue,
+    ]
   );
 
   if (!Array.isArray(issueIds)) return null;

@@ -66,6 +66,18 @@ describe("project workflow configuration", () => {
     await screen.findByText(key("saved"));
   });
 
+  it("explains that required fields do not create transition paths", async () => {
+    mount();
+    fireEvent.click(await screen.findByRole("checkbox", { name: key("enabled") }));
+    expect(screen.getByRole("status").textContent).toBe(key("no_transitions"));
+    const assignees = screen.getAllByRole("checkbox", { name: key("assignees") });
+    fireEvent.click(assignees[0]);
+    expect(screen.getByRole("status").textContent).toBe(key("no_transitions"));
+    expect(screen.getByText(key("transitions_help"))).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: key("add_transition") }));
+    expect(screen.queryByText(key("no_transitions"))).toBeNull();
+  });
+
   it("keeps input after a revision conflict", async () => {
     vi.mocked(workflowService.save).mockRejectedValue({ response: { status: 409 } });
     mount();

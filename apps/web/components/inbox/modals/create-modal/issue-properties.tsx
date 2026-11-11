@@ -10,8 +10,9 @@ import { ETabIndices } from "@plane/constants";
 import { Menu, MenuContent, MenuItem, MenuTrigger } from "@makeplane/propel/components/menu";
 import { CalendarOutline, ParentOutline } from "@makeplane/propel/icons";
 import { DateSelect } from "@plane/blocks/property-select";
+import { StateGroupIcon, IntakeStateGroupIcon } from "@plane/blocks/icons";
 import { useTranslation } from "@plane/i18n";
-import type { ISearchIssueResponse, TIssue } from "@plane/types";
+import type { ISearchIssueResponse, TIssue, TWorkflowState } from "@plane/types";
 import { renderFormattedPayloadDate, getDate, getTabIndex } from "@plane/utils";
 // components
 import { CycleSelect } from "@/components/dropdowns/cycle/cycle-select";
@@ -33,10 +34,20 @@ type TInboxIssueProperties = {
   data: Partial<TIssue>;
   handleData: (issueKey: keyof Partial<TIssue>, issueValue: Partial<TIssue>[keyof Partial<TIssue>]) => void;
   isVisible?: boolean;
+  configuredState?: TWorkflowState;
+  showStartDate?: boolean;
 };
 
 export const InboxIssueProperties = observer(function InboxIssueProperties(props: TInboxIssueProperties) {
-  const { workspaceSlug, projectId, data, handleData, isVisible = false } = props;
+  const {
+    workspaceSlug,
+    projectId,
+    data,
+    handleData,
+    isVisible = false,
+    configuredState,
+    showStartDate = false,
+  } = props;
   // translation
   const { t } = useTranslation();
   // hooks
@@ -61,14 +72,25 @@ export const InboxIssueProperties = observer(function InboxIssueProperties(props
   return (
     <div className="relative flex flex-wrap items-center gap-2">
       {/* intake state */}
-      <IntakeStateSelect
-        workspaceSlug={workspaceSlug}
-        value={data?.state_id}
-        onChange={(stateId) => handleData("state_id", stateId)}
-        projectId={projectId}
-        variant="pill-md"
-        tabIndex={getIndex("state_id")}
-      />
+      {configuredState ? (
+        <span className="inline-flex h-7 items-center gap-1.5 rounded-sm border border-subtle-1 px-2 text-caption-sm-regular">
+          {configuredState.group === "triage" ? (
+            <IntakeStateGroupIcon stateGroup="triage" color={configuredState.color} />
+          ) : (
+            <StateGroupIcon stateGroup={configuredState.group} color={configuredState.color} />
+          )}
+          {configuredState.name}
+        </span>
+      ) : (
+        <IntakeStateSelect
+          workspaceSlug={workspaceSlug}
+          value={data?.state_id}
+          onChange={(stateId) => handleData("state_id", stateId)}
+          projectId={projectId}
+          variant="pill-md"
+          tabIndex={getIndex("state_id")}
+        />
+      )}
 
       {/* priority */}
       <PrioritySelect
@@ -80,10 +102,11 @@ export const InboxIssueProperties = observer(function InboxIssueProperties(props
 
       {/* Assignees */}
       <MemberSelect
+        testId="intake-assignees"
         projectId={projectId}
         value={data?.assignee_ids || []}
         onChange={(assigneeIds) => handleData("assignee_ids", assigneeIds)}
-        placeholder="Assignees"
+        placeholder={t("project_settings.workflow.assignees")}
         multiple
         variant={(data?.assignee_ids || []).length ? "avatar-group-md" : "pill-md"}
         tabIndex={getIndex("assignee_ids")}
@@ -100,12 +123,13 @@ export const InboxIssueProperties = observer(function InboxIssueProperties(props
       />
 
       {/* start date */}
-      {isVisible && (
+      {(isVisible || showStartDate) && (
         <DateSelect
+          testId="intake-start-date"
           value={getDate(data?.start_date) ?? null}
           onChange={(date) => handleData("start_date", date ? renderFormattedPayloadDate(date) : "")}
-          minDate={minDate ?? undefined}
-          placeholder="Start date"
+          maxDate={maxDate ?? undefined}
+          placeholder={t("project_settings.workflow.start_date")}
           icon={<CalendarOutline />}
           weekStartsOn={userProfile?.start_of_the_week}
           clearable
@@ -117,10 +141,11 @@ export const InboxIssueProperties = observer(function InboxIssueProperties(props
 
       {/* due date */}
       <DateSelect
+        testId="intake-due-date"
         value={getDate(data?.target_date) ?? null}
         onChange={(date) => handleData("target_date", date ? renderFormattedPayloadDate(date) : "")}
         minDate={minDate ?? undefined}
-        placeholder="Due date"
+        placeholder={t("project_settings.workflow.target_date")}
         icon={<CalendarOutline />}
         weekStartsOn={userProfile?.start_of_the_week}
         clearable

@@ -306,3 +306,169 @@ test("kanban drag collects required fields before committing a transition", asyn
     .poll(async () => (await (await page.request.get(api + projectPath + `issues/${issueId}/`)).json()).state_id)
     .toBe(fixture.states.Live);
 });
+
+test("all five layouts keep work-item creation in the page toolbar", async ({ page }) => {
+  test.setTimeout(120_000);
+  const created = await page.request.post(api + projectPath + "issues/", {
+    data: { name: "Layout visibility task", start_date: "2026-11-10", target_date: "2026-11-12" },
+  });
+  expect(created.ok()).toBeTruthy();
+  const issueId = (await created.json()).id;
+  const props = await (await page.request.get(api + projectPath + "user-properties/")).json();
+  // Each layout changes the same page and saved preference, so verification is sequential.
+  /* oxlint-disable no-await-in-loop */
+  for (const layout of ["list", "kanban", "swimlanes", "spreadsheet", "calendar", "gantt_chart"]) {
+    expect(
+      (
+        await page.request.patch(api + projectPath + "user-properties/", {
+          data: {
+            display_filters: {
+              ...props.display_filters,
+              layout: layout === "swimlanes" ? "kanban" : layout,
+              group_by: ["list", "kanban", "swimlanes"].includes(layout) ? "state" : null,
+              sub_group_by: layout === "swimlanes" ? "priority" : null,
+            },
+          },
+        })
+      ).ok()
+    ).toBeTruthy();
+    await page.goto(`/${fixture.workspaceSlug}/projects/${fixture.projectId}/issues/`);
+    await expect(page.getByText("Layout visibility task", { exact: true }).first()).toBeVisible();
+    expect(
+      await page
+        .getByText("New work item", { exact: true })
+        .filter({ visible: true })
+        .evaluateAll((elements) => elements.every((element) => !!element.closest('aside, [role="complementary"]')))
+    ).toBe(true);
+    await expect(page.getByRole("button", { name: "Add work item", exact: true })).toHaveCount(1);
+    await expect(page.getByRole("button", { name: "Add", exact: true })).toHaveCount(0);
+    if (layout === "calendar") {
+      await page.getByText("12", { exact: true }).first().hover();
+      await expect(page.getByText("Add work item", { exact: true })).toHaveCount(1);
+    }
+  }
+  /* oxlint-enable no-await-in-loop */
+  expect((await page.request.delete(api + projectPath + `issues/${issueId}/`)).ok()).toBeTruthy();
+  await page.reload();
+  await expect(page.getByRole("button", { name: "Add work item", exact: true })).toHaveCount(1);
+  expect(
+    await page
+      .getByText("New work item", { exact: true })
+      .filter({ visible: true })
+      .evaluateAll((elements) => elements.every((element) => !!element.closest('aside, [role="complementary"]')))
+  ).toBe(true);
+});
+
+test("missing task paths explain the configuration and adding a path enables dragging", async ({ page }) => {
+  test.setTimeout(120_000);
+  const config = await (await page.request.get(api + projectPath + "workflow/")).json();
+  expect(
+    (
+      await page.request.put(api + projectPath + "workflow/", {
+        data: {
+          ...config,
+          enabled: true,
+          requirements: [
+            { branch: "task", state_id: fixture.states.Reviewed, fields: ["assignees", "start_date", "target_date"] },
+          ],
+        },
+      })
+    ).ok()
+  ).toBeTruthy();
+  const created = await page.request.post(api + projectPath + "issues/", {
+    data: {
+      name: "Configured path task",
+      assignee_ids: [fixture.userId],
+      start_date: "2026-11-10",
+      target_date: "2026-11-12",
+    },
+  });
+  expect(created.ok()).toBeTruthy();
+  const issueId = (await created.json()).id;
+  const props = await (await page.request.get(api + projectPath + "user-properties/")).json();
+  expect(
+    (
+      await page.request.patch(api + projectPath + "user-properties/", {
+        data: {
+          display_filters: { ...props.display_filters, layout: "kanban", group_by: "state", sub_group_by: null },
+        },
+      })
+    ).ok()
+  ).toBeTruthy();
+  await page.goto(`/${fixture.workspaceSlug}/projects/${fixture.projectId}/issues/`);
+  const card = page.locator(`a[id^="issue_${issueId}_"]`).first();
+  const column = page.locator(`[id^="${fixture.states.Reviewed}__"]`);
+  await expect(card).toBeVisible();
+  await card.dragTo(column);
+  await expect(page.getByRole("alert")).toContainText("No transition is configured between these states");
+  expect((await (await page.request.get(api + projectPath + `issues/${issueId}/`)).json()).state_id).toBe(
+    fixture.states.Ready
+  );
+  await page.goto(settingsPath);
+  await expect(page.getByRole("status")).toContainText("This branch has no transitions");
+  await page.getByRole("button", { name: "Add transition", exact: true }).click();
+  await choose(page, "From state", "Ready");
+  await choose(page, "To state", "Reviewed");
+  await page.getByRole("button", { name: "Save configuration", exact: true }).click();
+  await expect(page.getByText("Workflow configuration saved.", { exact: true })).toBeVisible();
+  await page.goto(`/${fixture.workspaceSlug}/projects/${fixture.projectId}/issues/`);
+  await expect(card).toBeVisible();
+  await card.dragTo(column);
+  await expect
+    .poll(async () => (await (await page.request.get(api + projectPath + `issues/${issueId}/`)).json()).state_id)
+    .toBe(fixture.states.Reviewed);
+});
+
+test("Intake form uses the configured submission state and sends required fields", async ({ page }) => {
+  test.setTimeout(120_000);
+  const config = await (await page.request.get(api + projectPath + "workflow/")).json();
+  // A non-Triage submission state reproduces the deployed UI's legacy alias bug.
+  expect(
+    (
+      await page.request.put(api + projectPath + "workflow/", {
+        data: {
+          ...config,
+          enabled: true,
+          intake_submission_state_id: fixture.states.Ready,
+          requirements: [
+            {
+              branch: "requirement",
+              state_id: fixture.states.Ready,
+              fields: ["assignees", "start_date", "target_date"],
+            },
+          ],
+        },
+      })
+    ).ok()
+  ).toBeTruthy();
+  await page.goto(`/${fixture.workspaceSlug}/projects/${fixture.projectId}/intake/`);
+  await page.getByRole("button", { name: "Add work item", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Create intake work item", exact: true });
+  await dialog.getByPlaceholder("Title", { exact: true }).fill("Browser intake submission");
+  await expect(dialog.getByText("Ready", { exact: true })).toBeVisible();
+  await dialog.getByRole("button", { name: "Create work item", exact: true }).click();
+  await expect(dialog.getByRole("alert")).toContainText("Assignees");
+  await expect(dialog.getByRole("alert")).toContainText("Start date");
+  await dialog.getByTestId("intake-assignees").click();
+  await page
+    .getByRole("option", { name: /workflow/i })
+    .first()
+    .click();
+  // Close the picker by clicking the title: Escape is also bound to closing the whole Intake modal.
+  await dialog.getByPlaceholder("Title", { exact: true }).click();
+  await dialog.getByTestId("intake-start-date").click();
+  await page.getByRole("button", { name: /November 10(th)?, 2026/ }).click();
+  await dialog.getByTestId("intake-due-date").click();
+  await page.getByRole("button", { name: /November 12(th)?, 2026/ }).click();
+  const response = page.waitForResponse((r) => r.url().endsWith("/inbox-issues/") && r.request().method() === "POST");
+  await dialog.getByRole("button", { name: "Create work item", exact: true }).click();
+  const saved = await response;
+  expect(saved.ok()).toBeTruthy();
+  const body = await saved.json();
+  expect(body.issue.state_id).toBe(fixture.states.Ready);
+  expect(body.issue.assignee_ids).toContain(fixture.userId);
+  expect(body.issue.start_date).toBe("2026-11-10");
+  expect(body.issue.target_date).toBe("2026-11-12");
+  await expect(dialog).not.toBeVisible();
+  await expect(page.getByText("Browser intake submission", { exact: true }).first()).toBeVisible();
+});

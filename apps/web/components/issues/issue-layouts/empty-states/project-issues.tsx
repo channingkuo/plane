@@ -12,7 +12,6 @@ import { useTranslation } from "@plane/i18n";
 import { EmptyStateDetailed } from "@plane/blocks/empty-state";
 import { EIssuesStoreType, EUserProjectRoles } from "@plane/types";
 // hooks
-import { useCommandPalette } from "@/hooks/store/use-command-palette";
 import { useUserPermissions } from "@/hooks/store/user";
 import { useWorkItemFilterInstance } from "@/hooks/store/work-item-filters/use-work-item-filter-instance";
 
@@ -23,7 +22,6 @@ export const ProjectEmptyState = observer(function ProjectEmptyState() {
   // plane imports
   const { t } = useTranslation();
   // store hooks
-  const { toggleCreateIssueModal } = useCommandPalette();
   const { allowPermissions } = useUserPermissions();
   // derived values
   const projectWorkItemFilter = useWorkItemFilterInstance(EIssuesStoreType.PROJECT, projectId);
@@ -54,16 +52,7 @@ export const ProjectEmptyState = observer(function ProjectEmptyState() {
           assetKey="work-item"
           title={t("project_empty_state.work_items.title")}
           description={t("project_empty_state.work_items.description")}
-          actions={[
-            {
-              label: t("project_empty_state.work_items.cta_primary"),
-              onClick: () => {
-                toggleCreateIssueModal(true, EIssuesStoreType.PROJECT);
-              },
-              disabled: !canPerformEmptyStateActions,
-              variant: "primary",
-            },
-          ]}
+          actions={[]}
         />
       )}
     </div>

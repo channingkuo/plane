@@ -119,6 +119,19 @@ class WorkflowCreationContextEndpoint(BaseAPIView):
                 "enabled": True,
                 "revision": workflow.revision,
                 "initial_state_id": data["task_initial_state_id"],
+                "intake": {
+                    "state": next(
+                        s for s in state_options(project) if str(s["id"]) == data["intake_submission_state_id"]
+                    ),
+                    "fields": next(
+                        (
+                            r["fields"]
+                            for r in data["requirements"]
+                            if r["branch"] == "requirement" and r["state_id"] == data["intake_submission_state_id"]
+                        ),
+                        [],
+                    ),
+                },
                 "fields": next(
                     (
                         r["fields"]

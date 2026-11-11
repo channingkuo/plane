@@ -156,6 +156,12 @@ export function ProjectWorkflowSettings({ workspaceSlug, projectId }: { workspac
       </div>
       <div className="flex flex-col gap-4">
         <h3>{label("transitions")}</h3>
+        <p className="text-body-sm-regular text-secondary">{label("transitions_help")}</p>
+        {working.enabled && !working.transitions.some((rule) => rule.branch === branch) && (
+          <p role="status" className="rounded border border-subtle p-3 text-body-sm-regular">
+            {label("no_transitions")}
+          </p>
+        )}
         {working.transitions.map((rule, index) =>
           rule.branch !== branch ? null : (
             // eslint-disable-next-line react/no-array-index-key -- Controlled draft rows have editable state IDs.

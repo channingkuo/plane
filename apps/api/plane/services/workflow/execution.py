@@ -356,6 +356,10 @@ def _guarded_handler(handler, view, request, *args, **kwargs):
         if kwargs.get("slug")
         else Project.objects.none()
     )
+    # Classify the trusted handler, including legacy /inbox-issues/ aliases.
+    intake_operation = any(
+        base.__name__ in WORKFLOW_MUTATION_VIEWS and base.__name__.startswith("Intake") for base in type(view).__mro__
+    )
     with transaction.atomic():
         locked = list(projects.select_for_update().order_by("id"))
         before = {project.pk: snapshot(project.pk) for project in locked}
@@ -369,7 +373,7 @@ def _guarded_handler(handler, view, request, *args, **kwargs):
             {
                 "projects": {project.pk: project for project in locked},
                 "configs": configs,
-                "intake": "/intake" in request.path,
+                "intake": intake_operation,
             }
         )
         try:
@@ -384,7 +388,7 @@ def _guarded_handler(handler, view, request, *args, **kwargs):
                     request.user,
                     configs[project.pk],
                     before[project.pk],
-                    intake_operation="/intake" in request.path,
+                    intake_operation=intake_operation,
                 )
             if any(configs.values()):
                 response["X-Plane-Workflow"] = "enabled"

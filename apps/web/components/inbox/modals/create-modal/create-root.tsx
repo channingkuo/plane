@@ -9,6 +9,7 @@
 import type { FormEvent } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { observer } from "mobx-react";
+import useSWR from "swr";
 // plane imports
 import { ETabIndices } from "@plane/constants";
 import type { EditorRefApi } from "@plane/editor";
@@ -24,9 +25,9 @@ import {
 } from "@makeplane/propel/components/dialog";
 import { Button } from "@makeplane/propel/components/button";
 import { setToast } from "@plane/blocks/toast";
-import type { TIssue } from "@plane/types";
+import type { TIssue, TWorkflowField } from "@plane/types";
 import { Switch } from "@makeplane/propel/components/switch";
-import { renderFormattedPayloadDate, getTabIndex } from "@plane/utils";
+import { getTabIndex } from "@plane/utils";
 // hooks
 import { useProjectInbox } from "@/hooks/store/use-project-inbox";
 import { useWorkspace } from "@/hooks/store/use-workspace";
@@ -35,6 +36,8 @@ import useKeypress from "@/hooks/use-keypress";
 import { usePlatformOS } from "@/hooks/use-platform-os";
 // services
 import { FileService } from "@/services/file.service";
+import { workflowService } from "@/services/workflow.service";
+import { getWorkflowErrorMessage } from "@/services/workflow-errors";
 // local imports
 import { InboxIssueDescription } from "./issue-description";
 import { InboxIssueProperties } from "./issue-properties";
@@ -58,7 +61,7 @@ export const defaultIssueData: Partial<TIssue> = {
   state_id: "",
   label_ids: [],
   assignee_ids: [],
-  start_date: renderFormattedPayloadDate(new Date()),
+  start_date: "",
   target_date: "",
 };
 
@@ -80,6 +83,13 @@ export const InboxIssueCreateRoot = observer(function InboxIssueCreateRoot(props
   const { isMobile } = usePlatformOS();
   const { t } = useTranslation();
   // states
+  const { data: creation, error: creationError } = useSWR(
+    workspaceSlug && projectId ? ["workflow-creation", workspaceSlug, projectId] : null,
+    () => workflowService.creation(workspaceSlug, projectId)
+  );
+  const intake = creation?.enabled ? creation.intake : undefined;
+  const requiredFields = intake?.fields ?? [];
+  const [submitError, setSubmitError] = useState("");
   const [createMore, setCreateMore] = useState<boolean>(false);
   const [formSubmitting, setFormSubmitting] = useState(false);
   const [formData, setFormData] = useState<Partial<TIssue>>(defaultIssueData);
@@ -129,6 +139,17 @@ export const InboxIssueCreateRoot = observer(function InboxIssueCreateRoot(props
 
   const handleFormSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (!creation || creationError) return;
+    setSubmitError("");
+    const missing = requiredFields.filter((field: TWorkflowField) =>
+      field === "assignees" ? !formData.assignee_ids?.length : !formData[field]
+    );
+    if (missing.length) {
+      setSubmitError(
+        `${t("project_settings.workflow.required")}: ${missing.map((field) => t(`project_settings.workflow.${field}`)).join(", ")}`
+      );
+      return;
+    }
 
     if (!descriptionEditorRef.current?.isEditorReadyToDiscard()) {
       setToast({
@@ -143,9 +164,10 @@ export const InboxIssueCreateRoot = observer(function InboxIssueCreateRoot(props
       name: formData.name || "",
       description_html: formData.description_html || "<p></p>",
       priority: formData.priority || "none",
-      state_id: formData.state_id || "",
+      state_id: intake?.state.id ?? formData.state_id ?? "",
       label_ids: formData.label_ids || [],
       assignee_ids: formData.assignee_ids || [],
+      start_date: formData.start_date || null,
       target_date: formData.target_date || null,
     };
     setFormSubmitting(true);
@@ -174,11 +196,9 @@ export const InboxIssueCreateRoot = observer(function InboxIssueCreateRoot(props
       })
       .catch((error) => {
         console.error(error);
-        setToast({
-          type: "error",
-          title: `Error!`,
-          message: "Some error occurred. Please try again.",
-        });
+        const message = getWorkflowErrorMessage(error, t);
+        setSubmitError(message);
+        setToast({ type: "error", title: t("error"), message });
       });
     setFormSubmitting(false);
   };
@@ -216,7 +236,22 @@ export const InboxIssueCreateRoot = observer(function InboxIssueCreateRoot(props
                   onEnterKeyPress={() => submitBtnRef?.current?.click()}
                   onAssetUpload={(assetId) => setUploadedAssetIds((prev) => [...prev, assetId])}
                 />
+                {!creation && !creationError && <p role="status">{t("project_settings.workflow.loading")}</p>}
+                {creationError && <p role="alert">{t("project_settings.workflow.load_error")}</p>}
+                {requiredFields.length > 0 && (
+                  <p>
+                    {t("project_settings.workflow.required")}:{" "}
+                    {requiredFields.map((field) => t(`project_settings.workflow.${field}`)).join(", ")}
+                  </p>
+                )}
+                {submitError && (
+                  <p role="alert" className="text-danger-primary">
+                    {submitError}
+                  </p>
+                )}
                 <InboxIssueProperties
+                  configuredState={intake?.state}
+                  showStartDate={!!creation?.enabled}
                   workspaceSlug={workspaceSlug}
                   projectId={projectId}
                   data={formData}
@@ -263,7 +298,7 @@ export const InboxIssueCreateRoot = observer(function InboxIssueCreateRoot(props
               ref={submitBtnRef}
               type="submit"
               loading={formSubmitting}
-              disabled={isTitleLengthMoreThan255Character}
+              disabled={isTitleLengthMoreThan255Character || !creation || !!creationError || formSubmitting}
               tabIndex={getIndex("submit_button")}
               size="md"
               stretch="auto"

@@ -4,9 +4,11 @@
  * See the LICENSE file for details.
  */
 
+import type { TStateGroups } from "./state";
+
 export type TWorkflowBranch = "task" | "requirement";
 export type TWorkflowField = "assignees" | "start_date" | "target_date";
-export type TWorkflowState = { id: string; name: string; group: string; color: string };
+export type TWorkflowState = { id: string; name: string; group: TStateGroups | "triage"; color: string };
 export type TWorkflowTransition = {
   branch: TWorkflowBranch;
   from_state_id: string;
@@ -44,4 +46,12 @@ export type TIssueWorkflow = {
   can_change_requirement_state?: boolean;
   blocked_reason?: TWorkflowProblem | Record<string, never>;
   targets?: { state_id: string; allowed: boolean; reason: TWorkflowProblem | null }[];
+};
+
+export type TWorkflowCreationContext = {
+  enabled: boolean;
+  revision?: number;
+  initial_state_id?: string;
+  fields?: TWorkflowField[];
+  intake?: { state: TWorkflowState; fields: TWorkflowField[] };
 };

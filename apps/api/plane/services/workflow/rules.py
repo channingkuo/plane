@@ -115,7 +115,10 @@ def evaluate(config, branch, source, target, role, values, *, system=False):
             None,
         )
         if not transition:
-            raise Violation("WORKFLOW_TRANSITION_NOT_ALLOWED", "项目未配置该状态流转")
+            raise Violation(
+                "WORKFLOW_TRANSITION_NOT_ALLOWED",
+                "未配置该状态流转路径。请在“项目设置 → 工作流”的对应分支添加路径和允许角色；仅补齐字段不能变更状态。",
+            )
         if role not in transition["roles"]:
             raise Violation("WORKFLOW_ROLE_FORBIDDEN", "当前项目角色无权执行该流转", status=403)
     validate_fields(config, branch, target, values)
