@@ -23,6 +23,7 @@ import { BLOCK_HEIGHT, GANTT_SELECT_GROUP } from "../../constants";
 type Props = {
   block: IGanttBlock;
   rowIndex: number;
+  isRequirement?: boolean;
   enableSelection: boolean;
   isDragging: boolean;
   selectionHelpers?: TSelectionHelper;
@@ -30,7 +31,15 @@ type Props = {
 };
 
 export const IssuesSidebarBlock = observer(function IssuesSidebarBlock(props: Props) {
-  const { block, rowIndex, enableSelection, isDragging, selectionHelpers, isEpic = false } = props;
+  const {
+    block,
+    rowIndex,
+    isRequirement = false,
+    enableSelection,
+    isDragging,
+    selectionHelpers,
+    isEpic = false,
+  } = props;
   const { t } = useTranslation();
   // store hooks
   const { updateActiveBlockId, isBlockActive, getNumberOfDaysFromPosition } = useTimeLineChartStore();
@@ -47,11 +56,15 @@ export const IssuesSidebarBlock = observer(function IssuesSidebarBlock(props: Pr
 
   return (
     <div
-      className={cn("group/list-block", rowIndex % 2 === 0 ? "bg-surface-1" : "bg-layer-1", {
-        "rounded-sm bg-layer-1": isDragging,
-        "rounded-l-sm border border-r-0 border-accent-strong": getIsIssuePeeked(block.data.id),
-        "border border-r-0 border-strong-1": isIssueFocused,
-      })}
+      className={cn(
+        "group/list-block",
+        isRequirement ? "bg-accent-subtle" : rowIndex % 2 === 0 ? "bg-surface-1" : "bg-layer-1",
+        {
+          "rounded-sm bg-layer-1": isDragging,
+          "rounded-l-sm border border-r-0 border-accent-strong": getIsIssuePeeked(block.data.id),
+          "border border-r-0 border-strong-1": isIssueFocused,
+        }
+      )}
       onMouseEnter={() => updateActiveBlockId(block.id)}
       onMouseLeave={() => updateActiveBlockId(null)}
     >

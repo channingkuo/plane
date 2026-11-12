@@ -113,15 +113,48 @@ describe("work item timeline sidebar", () => {
 
   it("keeps hover and selection highlights above the striped background", () => {
     mocks.activeId = "scheduled";
+    mocks.blocks.scheduled.data.is_workflow_requirement = true;
     const selectionHelpers = {
       getIsEntitySelected: (id: string) => id === "scheduled",
       getIsEntityActive: () => false,
     } as unknown as NonNullable<Parameters<typeof IssueGanttSidebar>[0]["selectionHelpers"]>;
-    render(<IssueGanttSidebar {...props} selectionHelpers={selectionHelpers} blockIds={["undated", "scheduled"]} />);
+    render(
+      <IssueGanttSidebar
+        {...props}
+        highlightRequirements
+        selectionHelpers={selectionHelpers}
+        blockIds={["undated", "scheduled"]}
+      />
+    );
+    expect(row("scheduled").classList.contains("bg-accent-subtle")).toBe(true);
     expect(row("scheduled").firstElementChild?.classList.contains("bg-accent-primary/10")).toBe(true);
     fireEvent.mouseEnter(row("scheduled"));
     expect(mocks.updateActiveBlockId).toHaveBeenCalledWith("scheduled");
     fireEvent.mouseLeave(row("scheduled"));
     expect(mocks.updateActiveBlockId).toHaveBeenLastCalledWith(null);
+  });
+
+  it("highlights consecutive reviewed requirements while leaving development and test rows striped", () => {
+    mocks.blocks.undated.data.is_workflow_requirement = true;
+    mocks.blocks.scheduled.data.is_workflow_requirement = true;
+    mocks.blocks["same-day"].data.is_workflow_requirement = false;
+    render(
+      <IssueGanttSidebar
+        {...props}
+        highlightRequirements
+        blockIds={["undated", "scheduled", "same-day", "start-only"]}
+      />
+    );
+    expect(row("undated").classList.contains("bg-accent-subtle")).toBe(true);
+    expect(row("scheduled").classList.contains("bg-accent-subtle")).toBe(true);
+    expect(row("same-day").classList.contains("bg-surface-1")).toBe(true);
+    expect(row("start-only").classList.contains("bg-layer-1")).toBe(true);
+  });
+
+  it("uses normal stripes for other sorting modes even when requirement metadata is cached", () => {
+    mocks.blocks.undated.data.is_workflow_requirement = true;
+    render(<IssueGanttSidebar {...props} blockIds={["undated"]} />);
+    expect(row("undated").classList.contains("bg-accent-subtle")).toBe(false);
+    expect(row("undated").classList.contains("bg-surface-1")).toBe(true);
   });
 });

@@ -178,7 +178,7 @@ export const ProjectOverview = observer(function ProjectOverview({
                 void update(row.id, { start_date: patch.start_date, target_date: patch.target_date })
               }
               blockToRender={(row: TIssue) => <IssueGanttBlock issueId={row.id} />}
-              sidebarToRender={(props) => <IssueGanttSidebar {...props} showAllBlocks />}
+              sidebarToRender={(props) => <IssueGanttSidebar {...props} showAllBlocks highlightRequirements />}
               enableBlockLeftResize={!updating}
               enableBlockRightResize={!updating}
               enableBlockMove={!updating}

@@ -139,7 +139,7 @@ def issue_on_results(
 
     required_fields.extend(original_list)
     if "workflow_order" in issues.query.annotations:
-        required_fields.append("workflow_order")
+        required_fields.extend(["workflow_order", "is_workflow_requirement"])
     return list(issues.values(*required_fields))
 
 

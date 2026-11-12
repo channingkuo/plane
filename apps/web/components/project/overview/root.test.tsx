@@ -34,8 +34,20 @@ vi.mock("@/components/gantt-chart/root", () => ({
   ),
 }));
 vi.mock("@/components/gantt-chart/sidebar/issues/sidebar", () => ({
-  IssueGanttSidebar: ({ blockIds, showAllBlocks }: { blockIds: string[]; showAllBlocks: boolean }) => (
-    <div data-testid="timeline-sidebar" data-show-all-blocks={showAllBlocks}>
+  IssueGanttSidebar: ({
+    blockIds,
+    showAllBlocks,
+    highlightRequirements,
+  }: {
+    blockIds: string[];
+    showAllBlocks: boolean;
+    highlightRequirements: boolean;
+  }) => (
+    <div
+      data-testid="timeline-sidebar"
+      data-show-all-blocks={showAllBlocks}
+      data-highlight-requirements={highlightRequirements}
+    >
       {blockIds.join(",")}
     </div>
   ),
@@ -84,6 +96,7 @@ describe("project overview", () => {
     await waitFor(() => expect(screen.getByTestId("timeline-ids").textContent).toBe("undated"));
     expect(screen.getByTestId("timeline-sidebar").textContent).toBe("undated");
     expect(screen.getByTestId("timeline-sidebar").getAttribute("data-show-all-blocks")).toBe("true");
+    expect(screen.getByTestId("timeline-sidebar").getAttribute("data-highlight-requirements")).toBe("true");
     expect(mocks.getIssues).toHaveBeenCalledWith(
       "workspace",
       "project",

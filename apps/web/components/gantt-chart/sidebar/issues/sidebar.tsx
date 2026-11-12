@@ -35,6 +35,7 @@ type Props = {
   showAllBlocks?: boolean;
   selectionHelpers?: TSelectionHelper;
   isEpic?: boolean;
+  highlightRequirements?: boolean;
 };
 
 export const IssueGanttSidebar = observer(function IssueGanttSidebar(props: Props) {
@@ -49,6 +50,7 @@ export const IssueGanttSidebar = observer(function IssueGanttSidebar(props: Prop
     showAllBlocks = false,
     selectionHelpers,
     isEpic = false,
+    highlightRequirements = false,
   } = props;
 
   const { getBlockById } = useTimeLineChart(GANTT_TIMELINE_TYPE.ISSUE);
@@ -106,6 +108,7 @@ export const IssueGanttSidebar = observer(function IssueGanttSidebar(props: Prop
                     <IssuesSidebarBlock
                       block={block}
                       rowIndex={index}
+                      isRequirement={highlightRequirements && block.data?.is_workflow_requirement === true}
                       enableSelection={enableSelection}
                       isDragging={isDragging}
                       selectionHelpers={selectionHelpers}

@@ -135,7 +135,14 @@ export const BaseGanttRoot = observer(function BaseGanttRoot(props: IBaseGanttRo
             blockIds={issuesIds}
             blockUpdateHandler={updateIssueBlockStructure}
             blockToRender={(data: TIssue) => <IssueGanttBlock issueId={data.id} isEpic={isEpic} />}
-            sidebarToRender={(sidebarProps) => <IssueGanttSidebar {...sidebarProps} showAllBlocks isEpic={isEpic} />}
+            sidebarToRender={(sidebarProps) => (
+              <IssueGanttSidebar
+                {...sidebarProps}
+                showAllBlocks
+                isEpic={isEpic}
+                highlightRequirements={appliedDisplayFilters?.order_by === "workflow_order"}
+              />
+            )}
             enableBlockLeftResize={isAllowed}
             enableBlockRightResize={isAllowed}
             enableBlockMove={isAllowed}

@@ -884,6 +884,7 @@ class IssueListDetailSerializer(serializers.Serializer):
 
         if hasattr(instance, "workflow_order"):
             data["workflow_order"] = instance.workflow_order
+            data["is_workflow_requirement"] = instance.is_workflow_requirement
 
         # Handle expanded fields only when requested - using direct field access
         if self.expand:

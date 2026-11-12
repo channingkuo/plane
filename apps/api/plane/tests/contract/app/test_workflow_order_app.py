@@ -57,6 +57,8 @@ def test_workflow_order_is_global_paginated_and_preserves_filters(session_client
         response = session_client.get(issue_url(project), params)
         assert response.status_code == 200, response.data
         result.extend(str(row["id"]) for row in response.data["results"])
+        for row in response.data["results"]:
+            assert row["is_workflow_requirement"] is (str(row["id"]) in {str(early.pk), str(late.pk)})
         ranks.extend(row["workflow_order"] for row in response.data["results"])
         if not response.data["next_page_results"]:
             break

@@ -58,7 +58,7 @@ def workflow_order_ids(rows):
 
 
 def order_workflow_queryset(queryset):
-    from django.db.models import Case, IntegerField, Value, When
+    from django.db.models import BooleanField, Case, IntegerField, Value, When
     from plane.db.models import Issue
 
     # Use durable Intake acceptance/test-source facts, rather than translated
@@ -92,9 +92,14 @@ def order_workflow_queryset(queryset):
         ]
     )
     return queryset.annotate(
+        is_workflow_requirement=Case(
+            When(workflow_context__origin="intake", workflow_context__accepted_at__isnull=False, then=Value(True)),
+            default=Value(False),
+            output_field=BooleanField(),
+        ),
         workflow_order=Case(
             *[When(pk=key, then=Value(index)) for index, key in enumerate(ordered_ids)],
             default=Value(len(ordered_ids)),
             output_field=IntegerField(),
-        )
+        ),
     ).order_by("workflow_order", "id")
