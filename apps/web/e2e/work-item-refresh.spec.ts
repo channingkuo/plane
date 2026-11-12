@@ -124,10 +124,12 @@ test("workflow drag keeps the board mounted and scrolled while fetching the gene
     .poll(async () => {
       const response = await page.request.get(api + projectPath + `issues/?parent=${ids[0]}&per_page=1000`);
       const data = await response.json();
-      return data.results?.some((item: { name: string }) => item.name === "测试：Refresh transition source");
+      return data.results?.some(
+        (item: { name: string }) => item.name === "【自动生成测试任务】Refresh transition source"
+      );
     })
     .toBe(true);
-  await expect(page.getByText("测试：Refresh transition source", { exact: true })).toBeAttached();
+  await expect(page.getByText("【自动生成测试任务】Refresh transition source", { exact: true })).toBeAttached();
   expect(await boardHandle!.evaluate((element) => element.isConnected)).toBe(true);
   expect(await sentinelHandle!.evaluate((element) => element.isConnected)).toBe(true);
   expect(await board.evaluate((element) => element.scrollLeft)).toBeCloseTo(scrollLeft, 0);

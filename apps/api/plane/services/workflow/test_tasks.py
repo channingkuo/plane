@@ -57,7 +57,7 @@ def create_test_tasks(project, actor, config, before, after):
             workspace_id=project.workspace_id,
             parent=source,
             state_id=state,
-            name=f"测试：{source.name}"[:255],
+            name=f"【自动生成测试任务】{source.name}"[:255],
             created_by=actor,
             updated_by=actor,
             **fields,

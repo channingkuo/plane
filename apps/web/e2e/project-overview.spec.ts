@@ -115,13 +115,15 @@ test("pending Intake, ancestor navigation, automatic test task and project overv
       const response = await page.request.get(api + projectPath + "issues/", {
         params: { work_item_scope: "all", per_page: "100" },
       });
-      return (await response.json()).results.some((row: { name: string }) => row.name === "测试：Implementation");
+      return (await response.json()).results.some(
+        (row: { name: string }) => row.name === "【自动生成测试任务】Implementation"
+      );
     })
     .toBeTruthy();
   await page.goto(`${base}/overview/`);
   await expect(page.getByRole("heading", { name: "Overview", exact: true })).toBeVisible();
   await expect(page.getByLabel("Testing: 1", { exact: true })).toBeVisible();
-  await expect(page.getByText("测试：Implementation", { exact: true }).first()).toBeVisible();
+  await expect(page.getByText("【自动生成测试任务】Implementation", { exact: true }).first()).toBeVisible();
   await expect(page.getByText("Pending intake visible", { exact: true }).first()).toBeVisible();
   await page.screenshot({ path: "/tmp/workflow-project-overview.png", fullPage: true });
   await page.getByText("Implementation", { exact: true }).first().click();

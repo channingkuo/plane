@@ -300,13 +300,14 @@ def test_concurrent_test_completion_aggregates_once(session_client, testing_conf
     assert WorkflowAudit.objects.filter(project=project, operation="requirement.completed").count() == 1
 
 
-def test_test_task_copies_content_and_relations_once(session_client, testing_config, create_user):
+@pytest.mark.parametrize("source_name", ["Feature", "开发工作项" * 51])
+def test_test_task_copies_content_and_relations_once(session_client, testing_config, create_user, source_name):
     project, config, states = testing_config
     enable(session_client, project, config)
     source = create_task(
         session_client,
         project,
-        name="Feature",
+        name=source_name,
         description_html="<p>Detailed content</p>",
         priority="high",
         start_date="2026-11-11",
@@ -327,7 +328,7 @@ def test_test_task_copies_content_and_relations_once(session_client, testing_con
     State.objects.filter(pk=states["Development ready"]).update(name="Ready for QA")
     change(session_client, project, source, states["Development ready"])
     child = Issue.objects.get(parent=source)
-    assert child.name == "测试：Feature"
+    assert child.name == f"【自动生成测试任务】{source_name}"[:255]
     assert str(child.state_id) == config["test_task_initial_state_id"]
     assert child.description_html == source.description_html
     assert child.description_json == source.description_json
