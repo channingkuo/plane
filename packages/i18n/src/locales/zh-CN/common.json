@@ -521,6 +521,7 @@
       "label": "排序方式",
       "manual": "手动 - 排名",
       "last_created": "最近创建",
+      "requirement_start_date": "需求开始时间（开发 → 测试）",
       "last_updated": "最近更新",
       "start_date": "开始日期",
       "due_date": "截止日期",

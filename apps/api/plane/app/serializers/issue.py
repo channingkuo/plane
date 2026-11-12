@@ -882,6 +882,9 @@ class IssueListDetailSerializer(serializers.Serializer):
             "link_count": instance.link_count,
         }
 
+        if hasattr(instance, "workflow_order"):
+            data["workflow_order"] = instance.workflow_order
+
         # Handle expanded fields only when requested - using direct field access
         if self.expand:
             if "issue_relation" in self.expand:

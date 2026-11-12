@@ -87,7 +87,7 @@ describe("project overview", () => {
     expect(mocks.getIssues).toHaveBeenCalledWith(
       "workspace",
       "project",
-      expect.objectContaining({ work_item_scope: "all" })
+      expect.objectContaining({ work_item_scope: "all", order_by: "workflow_order" })
     );
     expect(addIssue).toHaveBeenCalledWith([{ id: "undated" }]);
   });
@@ -114,5 +114,21 @@ describe("project overview", () => {
     expect(await screen.findByRole("alert")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "project_overview.retry" }));
     expect(await screen.findByText("待评审")).toBeTruthy();
+  });
+
+  it("reloads the ordered timeline after date changes made through the work item peek", async () => {
+    mount();
+    await waitFor(() => expect(screen.getByTestId("timeline-ids").textContent).toBe("undated"));
+    mocks.getIssues.mockResolvedValueOnce({
+      results: [{ id: "earlier" }, { id: "undated" }],
+      next_page_results: false,
+      next_cursor: "",
+    });
+    window.dispatchEvent(
+      new CustomEvent("plane:workflow-updated", {
+        detail: { workspaceSlug: "workspace", projectId: "project", listChanged: false, orderingChanged: true },
+      })
+    );
+    await waitFor(() => expect(screen.getByTestId("timeline-ids").textContent).toBe("earlier,undated"));
   });
 });

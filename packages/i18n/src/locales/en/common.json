@@ -521,6 +521,7 @@
       "label": "Order by",
       "manual": "Manual",
       "last_created": "Last created",
+      "requirement_start_date": "Requirement start date (development → tests)",
       "last_updated": "Last updated",
       "start_date": "Start date",
       "due_date": "Due date",

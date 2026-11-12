@@ -63,8 +63,17 @@ export const ProjectLayoutRoot = observer(function ProjectLayoutRoot() {
   useEffect(() => {
     let refreshTimer: number | undefined;
     const refresh = (event: Event) => {
-      const detail = (event as CustomEvent<{ workspaceSlug: string; projectId: string; listChanged?: boolean }>).detail;
-      if (detail?.listChanged === false) return;
+      const detail = (
+        event as CustomEvent<{
+          workspaceSlug: string;
+          projectId: string;
+          listChanged?: boolean;
+          orderingChanged?: boolean;
+        }>
+      ).detail;
+      const isWorkflowOrder =
+        !!projectId && issuesFilter?.getIssueFilters(projectId)?.displayFilters?.order_by === "workflow_order";
+      if (detail?.listChanged === false && !(detail.orderingChanged && isWorkflowOrder)) return;
       if (detail?.workspaceSlug === workspaceSlug && detail?.projectId === projectId && workspaceSlug && projectId) {
         window.clearTimeout(refreshTimer);
         refreshTimer = window.setTimeout(() => {
@@ -80,7 +89,7 @@ export const ProjectLayoutRoot = observer(function ProjectLayoutRoot() {
       window.clearTimeout(refreshTimer);
       issues.setWorkItemScope("mine");
     };
-  }, [issues, workspaceSlug, projectId]);
+  }, [issues, issuesFilter, workspaceSlug, projectId]);
   // derived values
   const workItemFilters = projectId ? issuesFilter?.getIssueFilters(projectId) : undefined;
   const activeLayout = workItemFilters?.displayFilters?.layout;

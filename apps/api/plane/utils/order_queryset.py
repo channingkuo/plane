@@ -157,6 +157,12 @@ def sanitize_order_by(value, allowed_fields, default="-created_at"):
 
 
 def order_issue_queryset(issue_queryset, order_by_param="-created_at"):
+    # This synthetic key is handled here, not in the shared field allowlist:
+    # other callers pass allowlisted values directly to ORM order_by().
+    if order_by_param in {"workflow_order", "-workflow_order"}:
+        from plane.utils.workflow_order import order_workflow_queryset
+
+        return order_workflow_queryset(issue_queryset), "workflow_order"
     # Reject any field that is not in the allowlist before building the queryset.
     # An unrecognised value is silently replaced with the safe default so callers
     # receive consistent output rather than an ORM error or data leak.

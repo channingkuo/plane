@@ -33,6 +33,7 @@ export type TIssueOrderByOptions =
   | "priority"
   | "-priority"
   | "sort_order"
+  | "workflow_order"
   | "state__name"
   | "-state__name"
   | "assignees__first_name"

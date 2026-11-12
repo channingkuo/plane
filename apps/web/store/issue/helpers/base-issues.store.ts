@@ -156,6 +156,7 @@ const ISSUE_ORDERBY_KEY: Record<TIssueOrderByOptions, keyof TIssue> = {
   priority: "priority",
   "-priority": "priority",
   sort_order: "sort_order",
+  workflow_order: "workflow_order",
   state__name: "state_id",
   "-state__name": "state_id",
   assignees__first_name: "assignee_ids",
@@ -1860,6 +1861,10 @@ export abstract class BaseIssuesStore implements IBaseIssuesStore {
     const array = orderBy(issues, (issue) => convertToISODateString(issue["created_at"]), ["desc"]);
 
     switch (key) {
+      case "workflow_order":
+        return getIssueIds(
+          orderBy(array, [(issue) => issue.workflow_order ?? Number.MAX_SAFE_INTEGER, "sequence_id", "id"])
+        );
       case "sort_order":
         return getIssueIds(orderBy(array, "sort_order"));
       case "state__name":

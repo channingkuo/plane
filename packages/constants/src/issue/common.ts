@@ -33,6 +33,7 @@ export enum EIssueGroupByToServerOptions {
   "cycle" = "cycle_id",
   "module" = "issue_module__module_id",
   "target_date" = "target_date",
+  // oxlint-disable-next-line typescript/no-duplicate-enum-values
   "project" = "project_id",
   "created_by" = "created_by",
   // eslint-disable-next-line @typescript-eslint/no-duplicate-enum-values
@@ -132,6 +133,7 @@ export const ISSUE_ORDER_BY_OPTIONS: {
   titleTranslationKey: string;
 }[] = [
   { key: "sort_order", titleTranslationKey: "common.order_by.manual" },
+  { key: "workflow_order", titleTranslationKey: "common.order_by.requirement_start_date" },
   { key: "-created_at", titleTranslationKey: "common.order_by.last_created" },
   { key: "-updated_at", titleTranslationKey: "common.order_by.last_updated" },
   { key: "start_date", titleTranslationKey: "common.order_by.start_date" },

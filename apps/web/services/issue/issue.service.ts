@@ -31,11 +31,22 @@ export class IssueService extends APIService {
     this.serviceType = serviceType;
   }
 
+  private notifyTimelineOrderChanged(workspaceSlug: string, projectId: string) {
+    window.dispatchEvent(
+      new CustomEvent("plane:workflow-updated", {
+        detail: { workspaceSlug, projectId, listChanged: false, orderingChanged: true },
+      })
+    );
+  }
+
   async createIssue(workspaceSlug: string, projectId: string, data: Partial<TIssue>): Promise<TIssue> {
     const workflow = await workflowService.creation(workspaceSlug, projectId);
     if (workflow.enabled) data = { ...data, state_id: workflow.initial_state_id };
     return this.post(`/api/workspaces/${workspaceSlug}/projects/${projectId}/${this.serviceType}/`, data)
-      .then((response) => response?.data)
+      .then((response) => {
+        this.notifyTimelineOrderChanged(workspaceSlug, projectId);
+        return response?.data;
+      })
       .catch((error) => {
         throw error?.response?.data;
       });
@@ -243,6 +254,7 @@ export class IssueService extends APIService {
               projectId,
               issueId,
               listChanged: ["state_id", "parent_id", "assignee_ids", "assignees"].some((field) => field in data),
+              ...("start_date" in data ? { orderingChanged: true } : {}),
             },
           })
         );
@@ -255,7 +267,10 @@ export class IssueService extends APIService {
 
   async deleteIssue(workspaceSlug: string, projectId: string, issuesId: string): Promise<any> {
     return this.delete(`/api/workspaces/${workspaceSlug}/projects/${projectId}/${this.serviceType}/${issuesId}/`)
-      .then((response) => response?.data)
+      .then((response) => {
+        this.notifyTimelineOrderChanged(workspaceSlug, projectId);
+        return response?.data;
+      })
       .catch((error) => {
         throw error?.response?.data;
       });
@@ -267,7 +282,10 @@ export class IssueService extends APIService {
     updates: { id: string; start_date?: string | null; target_date?: string | null }[]
   ): Promise<void> {
     return this.post(`/api/workspaces/${workspaceSlug}/projects/${projectId}/issue-dates/`, { updates })
-      .then((response) => response?.data)
+      .then((response) => {
+        this.notifyTimelineOrderChanged(workspaceSlug, projectId);
+        return response?.data;
+      })
       .catch((error) => {
         throw error?.response?.data;
       });

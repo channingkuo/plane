@@ -51,11 +51,37 @@ export const ProjectOverview = observer(function ProjectOverview({
       issueService.getIssues(slug, project, {
         work_item_scope: "all",
         per_page: "100",
-        order_by: "sequence_id",
+        order_by: "workflow_order",
         ...(cursor ? { cursor } : {}),
       }),
     { revalidateOnFocus: false }
   );
+  const { mutate: refreshSummary } = summary;
+  const { mutate: refreshTimeline } = pages;
+  useEffect(() => {
+    let timer: number | undefined;
+    const revalidate = (event: Event) => {
+      const detail = (
+        event as CustomEvent<{
+          workspaceSlug: string;
+          projectId: string;
+          listChanged?: boolean;
+          orderingChanged?: boolean;
+        }>
+      ).detail;
+      if (detail?.workspaceSlug !== workspaceSlug || detail?.projectId !== projectId) return;
+      if (detail.listChanged === false && !detail.orderingChanged) return;
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => {
+        void Promise.allSettled([refreshSummary(), refreshTimeline()]);
+      }, 100);
+    };
+    window.addEventListener("plane:workflow-updated", revalidate);
+    return () => {
+      window.clearTimeout(timer);
+      window.removeEventListener("plane:workflow-updated", revalidate);
+    };
+  }, [workspaceSlug, projectId, refreshSummary, refreshTimeline]);
   const rows = useMemo(
     () => pages.data?.flatMap((page) => (Array.isArray(page.results) ? page.results : [])) ?? [],
     [pages.data]

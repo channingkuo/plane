@@ -41,6 +41,7 @@ export const FilterOrderBy = observer(function FilterOrderBy(props: Props) {
   const activeField = getOrderByField(activeOrderBy);
   const isDescending = isDescendingOrderBy(activeOrderBy);
   const isManual = activeOrderBy === MANUAL_ORDER_BY;
+  const hasFixedDirection = isManual || activeOrderBy === "workflow_order";
 
   const options = ISSUE_ORDER_BY_OPTIONS.filter((option) => orderByOptions.includes(option.key));
   const selectedOption = options.find((option) => getOrderByField(option.key) === activeField);
@@ -49,7 +50,7 @@ export const FilterOrderBy = observer(function FilterOrderBy(props: Props) {
     const option = options.find((o) => getOrderByField(o.key) === field);
     if (!option) return;
     // coming from manual ordering there is no direction to keep, so the field's default applies
-    if (option.key === MANUAL_ORDER_BY || isManual) {
+    if (option.key === MANUAL_ORDER_BY || option.key === "workflow_order" || hasFixedDirection) {
       handleUpdate(option.key);
       return;
     }
@@ -80,7 +81,7 @@ export const FilterOrderBy = observer(function FilterOrderBy(props: Props) {
             />
           ))}
         </MenuRadioGroup>
-        {!isManual && (
+        {!hasFixedDirection && (
           <>
             <MenuSeparator />
             <MenuRadioGroup

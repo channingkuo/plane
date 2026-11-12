@@ -47,6 +47,8 @@ export type TBaseIssue = {
   sequence_id: number;
   name: string;
   sort_order: number;
+  /** Server-computed rank for requirement/development/test timeline ordering. */
+  workflow_order?: number;
 
   state_id: string | null;
   priority: TIssuePriorities | null;

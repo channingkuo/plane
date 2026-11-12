@@ -138,6 +138,8 @@ def issue_on_results(
         original_list.append(sub_group_by)
 
     required_fields.extend(original_list)
+    if "workflow_order" in issues.query.annotations:
+        required_fields.append("workflow_order")
     return list(issues.values(*required_fields))
 
 
