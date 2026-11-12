@@ -73,6 +73,13 @@ def descendants(nodes, parent):
     return result
 
 
+def completion_signature(nodes, ids):
+    return sorted(
+        (key, nodes[key]["state__group"] == "completed", str(nodes[key]["parent_id"]), str(nodes[key]["deleted_at"]))
+        for key in ids
+    )
+
+
 def audit(project, actor, config, operation, issue=None, **details):
     WorkflowAudit.objects.create(
         project=project,
@@ -82,7 +89,7 @@ def audit(project, actor, config, operation, issue=None, **details):
         revision=config["revision"],
         details=details,
     )
-    if issue and operation in {"requirement.completed", "requirement.reopened"}:
+    if issue and operation in {"task.completed", "requirement.completed", "requirement.reopened"}:
         from plane.bgtasks.issue_activities_task import issue_activity
         from .tasks import enqueue_after_commit
 
@@ -110,12 +117,16 @@ def unfinished_details(project, actor, ids):
 
 
 def aggregate(project, actor, config, before, after):
+    from .test_tasks import complete_test_sources
+
     groups = {
         str(key): group
         for key, group in State.all_state_objects.filter(project=project, deleted_at__isnull=True).values_list(
             "id", "group"
         )
     }
+    # Update task rows in the shared snapshot before evaluating their requirements.
+    complete_test_sources(project, actor, config, before, after, groups)
     contexts = IssueWorkflowContext.objects.filter(
         issue__project=project, issue__deleted_at__isnull=True, accepted_at__isnull=False
     ).select_related("issue")
@@ -128,18 +139,7 @@ def aggregate(project, actor, config, before, after):
         child_ids = descendants(after, parent_id)
         old_children = descendants(before, parent_id) if parent_id in before else []
 
-        def signature(nodes, ids):
-            return sorted(
-                (
-                    key,
-                    nodes[key]["state__group"] == "completed",
-                    str(nodes[key]["parent_id"]),
-                    str(nodes[key]["deleted_at"]),
-                )
-                for key in ids
-            )
-
-        changed = signature(before, old_children) != signature(after, child_ids)
+        changed = completion_signature(before, old_children) != completion_signature(after, child_ids)
         if changed:
             context.children_revision += 1
         unfinished = [key for key in child_ids if groups.get(str(after[key]["state_id"])) != "completed"]

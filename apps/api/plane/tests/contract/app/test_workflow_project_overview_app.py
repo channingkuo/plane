@@ -70,6 +70,18 @@ def testing_config(workflow_project):
             "roles": [20, 15],
         },
         {"branch": "task", "from_state_id": states["Testing"], "to_state_id": states["Developing"], "roles": [20, 15]},
+        {
+            "branch": "task",
+            "from_state_id": states["Testing"],
+            "to_state_id": config["requirement_completed_state_id"],
+            "roles": [20, 15],
+        },
+        {
+            "branch": "task",
+            "from_state_id": config["task_initial_state_id"],
+            "to_state_id": config["requirement_completed_state_id"],
+            "roles": [20, 15],
+        },
     ]
     return project, config, states
 
@@ -78,6 +90,214 @@ def change(client, project, issue, state, expected=204):
     response = client.patch(issue_url(project, issue.pk), {"state_id": state}, format="json")
     assert response.status_code == expected, getattr(response, "data", None)
     return response
+
+
+def ready_source(client, project, states, **data):
+    source = create_task(client, project, **data)
+    change(client, project, source, states["Developing"])
+    change(client, project, source, states["Development ready"])
+    return source, Issue.objects.get(parent=source, workflow_context__test_source=source)
+
+
+@pytest.mark.parametrize("with_requirement", [False, True])
+def test_test_completion_finishes_source_then_requirement(
+    session_client, testing_config, create_user, with_requirement, django_capture_on_commit_callbacks, mocker
+):
+    project, config, states = testing_config
+    # A custom test completion state need not be the requirement completion state.
+    test_done = str(
+        State.objects.create(project=project, workspace=project.workspace, name="QA passed", group="completed").pk
+    )
+    config["transitions"] += [
+        {"branch": "task", "from_state_id": states["Testing"], "to_state_id": test_done, "roles": [15, 20]},
+        {"branch": "task", "from_state_id": test_done, "to_state_id": states["Testing"], "roles": [15, 20]},
+    ]
+    enable(session_client, project, config)
+    parent = workflow_fixtures.approved_parent(project, config, create_user) if with_requirement else None
+    source, test = ready_source(session_client, project, states, **({"parent_id": str(parent.pk)} if parent else {}))
+    ProjectMember.objects.filter(project=project, member=create_user).update(role=15)
+    activity = mocker.patch("plane.bgtasks.issue_activities_task.issue_activity.delay")
+    mocker.patch("plane.app.views.issue.base.model_activity.delay")
+    mocker.patch("plane.app.views.issue.base.issue_description_version_task.delay")
+    with django_capture_on_commit_callbacks(execute=True) as callbacks:
+        change(session_client, project, test, test_done)
+        assert not activity.called
+    assert callbacks
+    assert any(
+        call.kwargs["issue_id"] == str(source.pk)
+        and '"workflow_source": "aggregation"' in call.kwargs["requested_data"]
+        for call in activity.call_args_list
+    )
+    source.refresh_from_db()
+    assert str(source.state_id) == test_done
+    assert source.completed_at is not None
+    assert WorkflowAudit.objects.filter(project=project, operation="task.completed", actor=create_user).count() == 1
+    if parent:
+        parent.refresh_from_db()
+        assert str(parent.state_id) == config["requirement_completed_state_id"]
+        assert parent.completed_at is not None
+    change(session_client, project, test, test_done)
+    assert WorkflowAudit.objects.filter(project=project, operation="task.completed").count() == 1
+    assert Issue.objects.filter(parent=source).count() == 1
+    if parent:
+        # Test reopening still propagates to the requirement through all descendants.
+        change(session_client, project, test, states["Testing"])
+        parent.refresh_from_db()
+        assert str(parent.state_id) == config["requirement_reopen_state_id"]
+
+
+@pytest.mark.parametrize("pending_kind", ["unstarted", "archived", "cancelled"])
+def test_test_completion_waits_for_all_source_descendants(session_client, testing_config, pending_kind):
+    project, config, states = testing_config
+    cancelled = str(
+        State.objects.create(project=project, workspace=project.workspace, name="Cancelled", group="cancelled").pk
+    )
+    config["transitions"] += [
+        {"branch": "task", "from_state_id": config["task_initial_state_id"], "to_state_id": cancelled, "roles": [20]},
+        {
+            "branch": "task",
+            "from_state_id": cancelled,
+            "to_state_id": config["requirement_completed_state_id"],
+            "roles": [20],
+        },
+    ]
+    enable(session_client, project, config)
+    source, test = ready_source(session_client, project, states)
+    sibling = create_task(session_client, project, name="Another child", parent_id=str(source.pk))
+    if pending_kind == "archived":
+        Issue.objects.filter(pk=sibling.pk).update(archived_at=timezone.now())
+    elif pending_kind == "cancelled":
+        change(session_client, project, sibling, cancelled)
+    change(session_client, project, test, config["requirement_completed_state_id"])
+    source.refresh_from_db()
+    assert str(source.state_id) == states["Development ready"]
+    if pending_kind == "archived":
+        Issue.objects.filter(pk=sibling.pk).update(archived_at=None)
+    change(session_client, project, sibling, config["requirement_completed_state_id"])
+    source.refresh_from_db()
+    assert str(source.state_id) == config["requirement_completed_state_id"]
+
+
+def test_test_completion_waits_for_other_requirement_branches(session_client, testing_config, create_user):
+    project, config, states = testing_config
+    enable(session_client, project, config)
+    parent = workflow_fixtures.approved_parent(project, config, create_user)
+    first, first_test = ready_source(session_client, project, states, name="First", parent_id=str(parent.pk))
+    second, second_test = ready_source(session_client, project, states, name="Second", parent_id=str(parent.pk))
+    change(session_client, project, first_test, config["requirement_completed_state_id"])
+    first.refresh_from_db()
+    parent.refresh_from_db()
+    assert str(first.state_id) == config["requirement_completed_state_id"]
+    assert str(parent.state_id) == config["intake_acceptance_state_id"]
+    change(session_client, project, second_test, config["requirement_completed_state_id"])
+    second.refresh_from_db()
+    parent.refresh_from_db()
+    assert str(second.state_id) == str(parent.state_id) == config["requirement_completed_state_id"]
+
+
+def test_test_completion_aggregates_nested_sources_bottom_up(session_client, testing_config, create_user):
+    project, config, states = testing_config
+    enable(session_client, project, config)
+    parent = workflow_fixtures.approved_parent(project, config, create_user)
+    outer, outer_test = ready_source(session_client, project, states, name="Outer", parent_id=str(parent.pk))
+    inner, inner_test = ready_source(session_client, project, states, name="Inner", parent_id=str(outer.pk))
+    done = config["requirement_completed_state_id"]
+    change(session_client, project, outer_test, done)
+    change(session_client, project, inner_test, done)
+    assert Issue.objects.filter(pk__in=[parent.pk, outer.pk, inner.pk], state_id=done).count() == 3
+
+
+@pytest.mark.parametrize("branch", ["task", "requirement"])
+def test_test_completion_blocked_fields_retry_without_repeating_test(
+    session_client, testing_config, create_user, branch
+):
+    project, config, states = testing_config
+    done = config["requirement_completed_state_id"]
+    config["requirements"] = [{"branch": branch, "state_id": done, "fields": ["target_date"]}]
+    enable(session_client, project, config)
+    parent = workflow_fixtures.approved_parent(project, config, create_user)
+    source, test = ready_source(session_client, project, states, parent_id=str(parent.pk))
+    response = session_client.patch(
+        issue_url(project, test.pk), {"state_id": done, "target_date": "2026-11-15"}, format="json"
+    )
+    assert response.status_code == 204, response.data
+    blocked = source if branch == "task" else parent
+    blocked.refresh_from_db()
+    test.refresh_from_db()
+    assert str(test.state_id) == done
+    assert str(blocked.state_id) != done
+    capabilities = session_client.get(issue_url(project, blocked.pk) + "workflow/").data
+    assert capabilities["blocked_reason"]["code"] == "WORKFLOW_REQUIRED_FIELDS_MISSING"
+    assert capabilities["blocked_reason"]["details"]["fields"] == ["target_date"]
+    filled = session_client.patch(issue_url(project, blocked.pk), {"target_date": "2026-11-15"}, format="json")
+    assert filled.status_code == 204, filled.data
+    assert Issue.objects.filter(pk__in=[source.pk, parent.pk], state_id=done, completed_at__isnull=False).count() == 2
+    assert not IssueWorkflowContext.objects.get(issue=blocked).blocked_reason
+
+
+@pytest.mark.parametrize("case", ["ordinary", "detached", "deleted", "developing", "cancelled", "disabled"])
+def test_test_completion_does_not_advance_unrelated_or_ineligible_source(session_client, testing_config, case):
+    project, config, states = testing_config
+    cancelled = State.objects.create(project=project, workspace=project.workspace, name="Cancelled", group="cancelled")
+    config["transitions"].append(
+        {
+            "branch": "task",
+            "from_state_id": states["Development ready"],
+            "to_state_id": str(cancelled.pk),
+            "roles": [20],
+        }
+    )
+    enable(session_client, project, config)
+    source, test = ready_source(session_client, project, states)
+    if case in {"ordinary", "deleted"}:
+        test.delete()
+        test = create_task(session_client, project, parent_id=str(source.pk) if case == "ordinary" else None)
+    elif case == "detached":
+        response = session_client.patch(issue_url(project, test.pk), {"parent_id": None}, format="json")
+        assert response.status_code == 204, response.data
+    elif case == "developing":
+        change(session_client, project, source, states["Developing"])
+    elif case == "cancelled":
+        change(session_client, project, source, str(cancelled.pk))
+    elif case == "disabled":
+        ProjectWorkflow.objects.filter(project=project).update(enabled=False)
+    source.refresh_from_db()
+    old_state = source.state_id
+    change(session_client, project, test, config["requirement_completed_state_id"])
+    source.refresh_from_db()
+    assert source.state_id == old_state
+    assert not WorkflowAudit.objects.filter(project=project, operation="task.completed").exists()
+
+
+@pytest.mark.django_db(transaction=True)
+def test_concurrent_test_completion_aggregates_once(session_client, testing_config, create_user, mocker):
+    mocker.patch("plane.app.views.issue.base.issue_activity.delay")
+    mocker.patch("plane.app.views.issue.base.model_activity.delay")
+    mocker.patch("plane.app.views.issue.base.issue_description_version_task.delay")
+    project, config, states = testing_config
+    enable(session_client, project, config)
+    parent = workflow_fixtures.approved_parent(project, config, create_user)
+    source, test = ready_source(session_client, project, states, parent_id=str(parent.pk))
+    barrier = Barrier(2)
+    user_id, done = create_user.pk, config["requirement_completed_state_id"]
+
+    def complete(_):
+        close_old_connections()
+        try:
+            client = APIClient()
+            client.force_authenticate(user=User.objects.get(pk=user_id))
+            barrier.wait(timeout=10)
+            response = client.patch(issue_url(project, test.pk), {"state_id": done}, format="json")
+            return response.status_code, getattr(response, "data", None)
+        finally:
+            connections.close_all()
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = list(pool.map(complete, range(2)))
+    assert all(status == 204 for status, _ in results), results
+    assert Issue.objects.filter(pk__in=[parent.pk, source.pk, test.pk], state_id=done).count() == 3
+    assert WorkflowAudit.objects.filter(project=project, operation="task.completed").count() == 1
+    assert WorkflowAudit.objects.filter(project=project, operation="requirement.completed").count() == 1
 
 
 def test_test_task_copies_content_and_relations_once(session_client, testing_config, create_user):

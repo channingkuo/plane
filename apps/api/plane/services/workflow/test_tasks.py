@@ -2,13 +2,13 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # See the LICENSE file for details.
 
-"""Trusted test-task creation, called only after a validated task transition."""
+"""Trusted test-task creation and completion of their development sources."""
 
 from copy import deepcopy
 
 from plane.db.models import Issue, IssueWorkflowContext, IssueAssignee, IssueLabel, CycleIssue, ModuleIssue
 from .configuration import issue_values, validate_assignees
-from .rules import validate_fields
+from .rules import Violation, evaluate, validate_fields
 
 
 def create_test_tasks(project, actor, config, before, after):
@@ -85,3 +85,74 @@ def create_test_tasks(project, actor, config, before, after):
         audit(project, actor, config, "test_task.created", child, source_issue_id=str(source.pk))
         created = True
     return created
+
+
+def complete_test_sources(project, actor, config, before, after, groups):
+    from .execution import audit, completion_signature, descendants
+
+    if not config.get("test_task_initial_state_id"):
+        return
+    ready_states = {
+        row["to_state_id"] for row in config["transitions"] if row["branch"] == "task" and row.get("creates_test_task")
+    }
+    tests = IssueWorkflowContext.objects.filter(
+        origin="task",
+        issue__project=project,
+        issue__deleted_at__isnull=True,
+        test_source__project=project,
+        test_source__deleted_at__isnull=True,
+        test_source__workflow_context__origin="task",
+        test_source__workflow_context__deleted_at__isnull=True,
+        test_source__workflow_context__test_source__isnull=True,
+    ).select_related("test_source", "test_source__workflow_context")
+    # A source may itself contain another development source. Finish the deepest
+    # source first so every ancestor sees the final completion result immediately.
+    for test in sorted(tests, key=lambda item: len(descendants(after, str(item.test_source_id)))):
+        source = test.test_source
+        source_id = str(source.pk)
+        row, test_row = after.get(source_id), after.get(str(test.issue_id))
+        context = source.workflow_context
+        child_ids = descendants(after, source_id)
+        eligible = (
+            row
+            and test_row
+            and str(row["state_id"]) in ready_states
+            and str(test_row["parent_id"]) == source_id
+            and groups.get(str(test_row["state_id"])) == "completed"
+            and all(groups.get(str(after[key]["state_id"])) == "completed" for key in child_ids)
+        )
+        if not eligible:
+            if context.blocked_reason:
+                context.blocked_reason = {}
+                context.save(update_fields=["blocked_reason"])
+            continue
+        old_children = descendants(before, source_id) if source_id in before else []
+        if not context.blocked_reason and completion_signature(before, old_children) == completion_signature(
+            after, child_ids
+        ):
+            continue
+        target = str(test_row["state_id"])
+        try:
+            values = issue_values(source)
+            validate_assignees(project, values["assignees"])
+            evaluate(config, "task", str(row["state_id"]), target, None, values, system=True)
+        except Violation as exc:
+            reason = {"code": exc.code, "message": exc.message, "details": exc.details}
+            if context.blocked_reason != reason:
+                audit(project, actor, config, "task.completion_blocked", source, **reason)
+            context.blocked_reason = reason
+        else:
+            source.state_id = target
+            source.save(update_fields=["state"])
+            context.blocked_reason = {}
+            audit(
+                project,
+                actor,
+                config,
+                "task.completed",
+                source,
+                from_state_id=str(row["state_id"]),
+                test_issue_id=str(test.issue_id),
+            )
+            row["state_id"], row["state__group"] = source.state_id, groups[target]
+        context.save(update_fields=["blocked_reason"])

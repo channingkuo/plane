@@ -104,3 +104,18 @@ def test_duplicates_and_unknown_fields_rejected(config):
 def test_system_paths_still_validate_fields(config):
     with pytest.raises(Violation):
         evaluate(config, "task", "todo", "doing", None, {}, system=True)
+
+
+@pytest.mark.parametrize("missing", [None, "assignees", "start_date", "target_date"])
+def test_automatic_source_completion_uses_task_completion_fields(config, missing):
+    config["requirements"].append(
+        {"branch": "task", "state_id": "done", "fields": ["assignees", "start_date", "target_date"]}
+    )
+    # Source completion is a system path even without a manual task transition.
+    if missing is None:
+        evaluate(config, "task", "doing", "done", None, VALUES, system=True)
+    else:
+        with pytest.raises(Violation) as failure:
+            evaluate(config, "task", "doing", "done", None, {**VALUES, missing: None}, system=True)
+        assert failure.value.code == "WORKFLOW_REQUIRED_FIELDS_MISSING"
+        assert failure.value.details["fields"] == [missing]

@@ -30,20 +30,27 @@ export const WorkflowStatus = observer(function WorkflowStatus({
     window.addEventListener("plane:workflow-updated", refresh);
     return () => window.removeEventListener("plane:workflow-updated", refresh);
   }, [mutate]);
-  if (!data?.enabled || data.branch !== "requirement" || !data.reviewed) return null;
+  if (!data?.enabled) return null;
+  const reviewedRequirement = data.branch === "requirement" && data.reviewed;
+  if (!reviewedRequirement && !data.blocked_reason?.code) return null;
   return (
     <div className="my-2 rounded border border-subtle px-3 py-2 text-body-sm-regular" role="status">
-      <p>
-        {t("project_settings.workflow.progress")}: {data.completed_descendant_count ?? 0}/{data.descendant_count ?? 0}
-      </p>
-      <p>
-        {t("project_settings.workflow.requirement_completed_state_id")}:{" "}
-        {getStateById(data.completion_state_id ?? "")?.name ?? "—"}
-      </p>
-      <p>
-        {t("project_settings.workflow.requirement_reopen_state_id")}:{" "}
-        {getStateById(data.reopen_state_id ?? "")?.name ?? "—"}
-      </p>
+      {reviewedRequirement && (
+        <>
+          <p>
+            {t("project_settings.workflow.progress")}: {data.completed_descendant_count ?? 0}/
+            {data.descendant_count ?? 0}
+          </p>
+          <p>
+            {t("project_settings.workflow.requirement_completed_state_id")}:{" "}
+            {getStateById(data.completion_state_id ?? "")?.name ?? "—"}
+          </p>
+          <p>
+            {t("project_settings.workflow.requirement_reopen_state_id")}:{" "}
+            {getStateById(data.reopen_state_id ?? "")?.name ?? "—"}
+          </p>
+        </>
+      )}
       {data.blocked_reason?.code && (
         <p>
           {t("project_settings.workflow.blocked")}{" "}
