@@ -9,13 +9,14 @@ from rest_framework.response import Response
 from plane.app.permissions import ROLE, allow_permission
 from plane.app.views.base import BaseAPIView
 from plane.db.models import Issue, Project, State
+from plane.services.workflow.project_items import overview_scope
 
 
 class ProjectOverviewEndpoint(BaseAPIView):
     @allow_permission([ROLE.ADMIN, ROLE.MEMBER])
     def get(self, request, slug, project_id):
         project = get_object_or_404(Project, pk=project_id, workspace__slug=slug)
-        issues = Issue.project_objects.filter(project=project)
+        issues = overview_scope(Issue.project_objects.filter(project=project), project, request.user)
         counts = {
             row["state_id"]: row["count"] for row in issues.order_by().values("state_id").annotate(count=Count("id"))
         }

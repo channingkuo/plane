@@ -49,7 +49,7 @@ export const ProjectOverview = observer(function ProjectOverview({
         : ["project-overview-timeline", workspaceSlug, projectId, previous?.next_cursor ?? ""],
     ([, slug, project, cursor]: string[]) =>
       issueService.getIssues(slug, project, {
-        work_item_scope: "all",
+        work_item_scope: "overview",
         per_page: "100",
         order_by: "workflow_order",
         ...(cursor ? { cursor } : {}),

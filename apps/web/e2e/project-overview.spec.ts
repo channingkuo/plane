@@ -164,7 +164,9 @@ test("members default to their assignments plus all reviews across five layouts"
   await page.getByRole("option", { name: "All work items", exact: true }).click();
   await expect(page.getByText("Someone else work", { exact: true }).first()).toBeVisible();
   await page.goto(`${base}/overview/`);
-  await expect(page.getByText("Someone else work", { exact: true }).first()).toBeVisible();
+  await expect(page.getByText("Someone else work", { exact: true })).toHaveCount(0);
   await expect(page.getByText("Member assigned work", { exact: true }).first()).toBeVisible();
+  await expect(page.getByText("Everyone reviews this", { exact: true }).first()).toBeVisible();
+  await expect(page.getByText("Pending intake visible", { exact: true }).first()).toBeVisible();
   expect(mine.id).toBeTruthy();
 });

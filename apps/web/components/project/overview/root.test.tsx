@@ -88,7 +88,7 @@ describe("project overview", () => {
     mocks.getIssues.mockResolvedValue({ results: [{ id: "undated" }], next_page_results: false, next_cursor: "" });
   });
 
-  it("shows custom and zero-count states and always requests the entire project", async () => {
+  it("shows custom and zero-count states and requests the role-scoped overview timeline", async () => {
     mount();
     expect(await screen.findByLabelText("完成: 0")).toBeTruthy();
     expect(screen.getByLabelText("自定义状态: 1")).toBeTruthy();
@@ -100,7 +100,7 @@ describe("project overview", () => {
     expect(mocks.getIssues).toHaveBeenCalledWith(
       "workspace",
       "project",
-      expect.objectContaining({ work_item_scope: "all", order_by: "workflow_order" })
+      expect.objectContaining({ work_item_scope: "overview", order_by: "workflow_order" })
     );
     expect(addIssue).toHaveBeenCalledWith([{ id: "undated" }]);
   });
@@ -117,7 +117,7 @@ describe("project overview", () => {
     expect(mocks.getIssues).toHaveBeenCalledWith(
       "workspace",
       "project",
-      expect.objectContaining({ cursor: "next-cursor", work_item_scope: "all" })
+      expect.objectContaining({ cursor: "next-cursor", work_item_scope: "overview" })
     );
   });
 

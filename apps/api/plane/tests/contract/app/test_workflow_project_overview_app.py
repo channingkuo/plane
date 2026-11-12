@@ -444,9 +444,9 @@ def test_review_scope_summary_and_pending_write_guard(session_client, workflow_p
     assert all_items.data["total_count"] == 4
     overview = session_client.get(url(project).replace("workflow/", "overview/"))
     assert overview.status_code == 200, overview.data
-    assert overview.data["total"] == 4
-    assert overview.data["undated_count"] == 4
-    assert sum(state["count"] for state in overview.data["states"]) == 4
+    assert overview.data["total"] == 3
+    assert overview.data["undated_count"] == 3
+    assert sum(state["count"] for state in overview.data["states"]) == 3
     assert (
         next(state for state in overview.data["states"] if str(state["id"]) == config["intake_submission_state_id"])[
             "count"
