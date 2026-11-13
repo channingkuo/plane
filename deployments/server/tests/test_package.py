@@ -22,6 +22,17 @@ PACKAGE = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(PACKAGE)
 SHA = "a" * 40
 VERSION = f"v{json.loads((ROOT / 'package.json').read_text())['version']}-XMW"
+MOUNTS = {
+    "api": {"/code/plane/logs": "logs/api"},
+    "worker": {"/code/plane/logs": "logs/worker"},
+    "beat-worker": {"/code/plane/logs": "logs/beat-worker"},
+    "migrator": {"/code/plane/logs": "logs/migrator"},
+    "plane-db": {"/var/lib/postgresql/data": "postgres"},
+    "plane-redis": {"/data": "redis"},
+    "plane-mq": {"/var/lib/rabbitmq": "rabbitmq"},
+    "plane-minio": {"/export": "minio"},
+    "proxy": {"/config": "proxy/config", "/data": "proxy/data"},
+}
 
 
 class ServerPackageTests(unittest.TestCase):
@@ -47,6 +58,7 @@ import json, os, sys
 with open(os.environ['DOCKER_TEST_LOG'], 'a') as stream:
     stream.write(json.dumps(sys.argv[1:]) + '\\n')
 if sys.argv[1] == 'info': print(os.environ.get('DOCKER_TEST_ARCH', 'x86_64'))
+if sys.argv[1:] == ['compose', 'version'] and os.environ.get('NO_COMPOSE_PLUGIN') == '1': sys.exit(1)
 if 'run' in sys.argv and 'migrator' in sys.argv and os.environ.get('FAIL_MIGRATION') == '1': sys.exit(23)
 """)
         fake_docker.chmod(0o755)
@@ -121,6 +133,7 @@ if 'run' in sys.argv and 'migrator' in sys.argv and os.environ.get('FAIL_MIGRATI
             "./deploy.sh init",
             "./deploy.sh up",
             "## 升级和已有数据",
+            "PLANE_DATA_DIR=../plane-data",
         ):
             self.assertIn(instruction, notes)
         self.assertNotIn("artifact ZIP", notes)
@@ -199,6 +212,70 @@ if 'run' in sys.argv and 'migrator' in sys.argv and os.environ.get('FAIL_MIGRATI
         self.assertEqual(result.returncode, 0)
         self.assertEqual((self.bundle / ".env").read_bytes(), original)
 
+    def test_bundle_maps_all_persistent_mounts_to_local_directories(self):
+        compose = (self.bundle / "docker-compose.yml").read_text()
+        self.assertNotIn("\nvolumes:\n", compose)
+        expected_paths = [
+            f"${{PLANE_DATA_DIR}}/{directory}:{target}"
+            for mounts in MOUNTS.values()
+            for target, directory in mounts.items()
+        ]
+        self.assertEqual(
+            [line.strip()[2:] for line in compose.splitlines() if line.startswith("      - ") and ":/" in line],
+            expected_paths,
+        )
+        # The shared community installer keeps its named-volume behavior.
+        community = (ROOT / "deployments/cli/community/docker-compose.yml").read_text()
+        self.assertIn("      - pgdata:/var/lib/postgresql/data", community)
+
+    def test_init_creates_and_recreates_default_data_directories(self):
+        values = self.init()
+        self.assertEqual(values["PLANE_DATA_DIR"], "../plane-data")
+        data = (self.bundle / values["PLANE_DATA_DIR"]).resolve()
+        for mounts in MOUNTS.values():
+            for directory in mounts.values():
+                self.assertTrue((data / directory).is_dir(), directory)
+        sentinel = data / "postgres/existing-data"
+        sentinel.write_text("preserve me")
+        (data / "logs/api").rmdir()
+        original = (self.bundle / ".env").read_bytes()
+        result = self.run_script("init")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue((data / "logs/api").is_dir())
+        self.assertEqual(sentinel.read_text(), "preserve me")
+        self.assertEqual((self.bundle / ".env").read_bytes(), original)
+
+    def test_init_supports_custom_local_paths_without_executing_dotenv(self):
+        self.init()
+        env_file = self.bundle / ".env"
+        original = env_file.read_text()
+        for path in ("./custom-data", "../sibling-data", str(self.root / "absolute data"), "./$(touch injected)"):
+            with self.subTest(path=path):
+                env_file.write_text(original.replace("PLANE_DATA_DIR=../plane-data", f"PLANE_DATA_DIR={path}"))
+                result = self.run_script("init")
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertTrue((self.bundle / path / "postgres").is_dir())
+                self.assertFalse((self.bundle / "injected").exists())
+
+    def test_init_rejects_missing_or_ambiguous_data_paths(self):
+        self.init()
+        env_file = self.bundle / ".env"
+        original = env_file.read_text()
+        for setting in ("", "PLANE_DATA_DIR=", "PLANE_DATA_DIR=unprefixed-data"):
+            with self.subTest(setting=setting):
+                env_file.write_text(original.replace("PLANE_DATA_DIR=../plane-data", setting))
+                result = self.run_script("init")
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("PLANE_DATA_DIR", result.stderr)
+
+    def test_compose_supports_standalone_command_when_plugin_is_missing(self):
+        self.init()
+        binaries = self.root / "bin"
+        shutil.copy2(binaries / "docker", binaries / "docker-compose")
+        result = self.run_script("status", NO_COMPOSE_PLUGIN="1")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue(any(args[0] == "--env-file" and args[-1] == "ps" for args in self.calls()))
+
     def test_https_init_and_invalid_urls(self):
         for url in (
             "https://plane.example.com/path",
@@ -259,6 +336,8 @@ if 'run' in sys.argv and 'migrator' in sys.argv and os.environ.get('FAIL_MIGRATI
             "docker-compose.yml",
             "-f",
             "compose.server.yml",
+            "--profile",
+            "maintenance",
             "config",
             "--format",
             "json",
@@ -275,12 +354,21 @@ if 'run' in sys.argv and 'migrator' in sys.argv and os.environ.get('FAIL_MIGRATI
             "api",
             "worker",
             "beat-worker",
+            "migrator",
             "proxy",
         ):
             self.assertIn("plane-selfhost/", services[name]["image"])
             self.assertTrue(services[name]["image"].endswith(":" + VERSION))
             self.assertNotIn("build", services[name])
-        self.assertNotIn("migrator", services)  # Maintenance profile is explicitly run by deploy.sh.
+        self.assertEqual(services["migrator"]["profiles"], ["maintenance"])
+        self.assertFalse(config.get("volumes"))
+        data = (self.bundle / "../plane-data").resolve()
+        for name, mounts in MOUNTS.items():
+            actual = services[name]["volumes"]
+            self.assertEqual(len(actual), len(mounts))
+            for mount in actual:
+                self.assertEqual(mount["type"], "bind")
+                self.assertEqual(Path(mount["source"]), data / mounts[mount["target"]])
         workflow = (ROOT / ".github/workflows/server-package.yml").read_text()
         for name in ("plane-db", "plane-redis", "plane-mq", "plane-minio"):
             self.assertIn(services[name]["image"], workflow)

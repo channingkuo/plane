@@ -19,6 +19,35 @@ ARCHIVES = (*COMPONENTS, "dependencies")
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
+def server_compose():
+    """Convert the community template's named volumes to server-local directories."""
+    mounts = {
+        "pgdata": "postgres",
+        "redisdata": "redis",
+        "uploads": "minio",
+        "logs_api": "logs/api",
+        "logs_worker": "logs/worker",
+        "logs_beat-worker": "logs/beat-worker",
+        "logs_migrator": "logs/migrator",
+        "rabbitmq_data": "rabbitmq",
+        "proxy_config": "proxy/config",
+        "proxy_data": "proxy/data",
+    }
+    template = (REPO_ROOT / "deployments/cli/community/docker-compose.yml").read_text()
+    services, separator, volumes = template.partition("\nvolumes:\n")
+    if not separator or set(volumes.splitlines()) != {f"  {name}:" for name in mounts}:
+        raise ValueError("Community volumes changed; update the server bind-mount mapping")
+    for name, directory in mounts.items():
+        services, count = re.subn(
+            rf"(?m)^(      - ){re.escape(name)}:",
+            rf"\g<1>${{PLANE_DATA_DIR}}/{directory}:",
+            services,
+        )
+        if count != 1:
+            raise ValueError(f"Expected exactly one community mount for {name}")
+    return services.rstrip("\n") + "\n"
+
+
 def image_tag():
     """Use the application's real version for all self-hosted component tags."""
     version = json.loads((REPO_ROOT / "package.json").read_text()).get("version")
@@ -62,10 +91,7 @@ def package(images_dir, output_dir, sha, arch, repository, run_id):
         source = REPO_ROOT / "deployments/server"
         for name in ("compose.server.yml", ".env.example", "deploy.sh", "README.md"):
             shutil.copy2(source / name, root / name)
-        shutil.copy2(
-            REPO_ROOT / "deployments/cli/community/docker-compose.yml",
-            root / "docker-compose.yml",
-        )
+        (root / "docker-compose.yml").write_text(server_compose())
         shutil.copy2(REPO_ROOT / "LICENSE.txt", root / "LICENSE.txt")
         images = {name: f"plane-selfhost/{name}:{version}" for name in COMPONENTS}
         (root / "images.env").write_text(

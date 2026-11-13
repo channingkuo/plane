@@ -41,6 +41,20 @@ cd plane-server
 
 `init` 在服务器生成随机数据库、消息队列、对象存储、应用及 Live 密钥，写入权限为 600 的 `.env`。再次执行会保留已有文件。不要将 `.env` 上传到代码仓库或公开分享；构建包只包含空密钥模板。
 
+所有持久化数据都绑定到本地目录，默认 `.env` 中的 `PLANE_DATA_DIR=../plane-data`，相对于解压后的 `plane-server` 目录。`init` 自动创建以下目录，再次执行也会补齐目录并保留已有数据和密钥：
+
+```text
+plane-data/
+├── postgres/
+├── redis/
+├── rabbitmq/
+├── minio/
+├── logs/{api,worker,beat-worker,migrator}/
+└── proxy/{config,data}/
+```
+
+如需指定其他磁盘，在 `.env` 中将 `PLANE_DATA_DIR` 改为实际路径（例如 `/mnt/data/plane`），再运行 `./deploy.sh init` 创建目录。路径须为绝对路径或以 `./`、`../` 开头的相对路径，直接填写路径值，不加引号或变量表达式。脚本优先使用 `docker compose`，也支持提供相同 Compose 2.24+ 功能的 `docker-compose` 命令。
+
 `up` 会依次：校验镜像校验和与 CPU 架构、导入镜像、启动依赖、暂停应用、同步执行数据库迁移，迁移成功后启动应用并等待就绪。任一迁移失败则停止执行，不启动新版本应用。镜像已经打包，启动使用 `--pull never --no-build`。
 
 部署完成后打开配置的 `WEB_URL`，首次实例设置入口是 `/god-mode/`。项目工作流默认关闭，在项目设置中配置并启用；本包的 API 已包含 `0126_project_workflows` 迁移。
@@ -101,9 +115,9 @@ docker ps -a --format 'table {{.Names}}\t{{.Image}}'
 
 ## 升级和已有数据
 
-先备份 PostgreSQL、上传文件和 `.env`。将新包解压到新目录，**从旧部署复制 `.env`，保留相同的 `COMPOSE_PROJECT_NAME` 和 Docker 数据卷**，再执行 `./deploy.sh up`。不要用新生成的随机密码替换已有数据库、RabbitMQ 或对象存储密码。
+先备份 PostgreSQL、上传文件和 `.env`。将新包解压到新目录，**从旧部署复制 `.env`，保留相同的 `COMPOSE_PROJECT_NAME`，并让 `PLANE_DATA_DIR` 指向原有数据目录**，再执行 `./deploy.sh init` 和 `./deploy.sh up`。相对路径以新包目录为基准；升级时建议使用原数据目录的绝对路径。不要用新生成的随机密码替换已有数据库、RabbitMQ 或对象存储密码。
 
-若原有 Plane 不是用此部署包安装的，先核对旧 Compose 项目名、卷名、数据库连接及对象存储设置。项目名不同会创建另一组空卷，不能据此认为旧数据已迁移；应先按原数据卷名称或外部服务连接配置 Compose，再运行迁移。不要将本包直接指向没有备份的旧数据库进行试装。
+若旧包使用 Docker 命名卷（或 `.env` 没有 `PLANE_DATA_DIR`），本次改为本地目录不会自动迁移旧卷数据。先停止旧服务并备份，将各旧卷的数据完整复制到对应本地子目录、保留文件属主和权限，然后在原 `.env` 中添加 `PLANE_DATA_DIR`；也可先调整 Compose 继续使用原卷。若原有 Plane 不是用此部署包安装的，还需核对旧 Compose 项目名、卷名、数据库连接及对象存储设置。不要以空目录启动并认为旧数据已经迁移，也不要将本包直接指向没有备份的旧数据库进行试装。
 
 脚本不会删除数据卷，也不会自动回退数据库迁移。镜像回滚不等于数据库回滚；迁移失败先看 `migrator` 输出并按备份与兼容性方案恢复。需要完整停机时使用 `stop`，不要使用 `docker compose down -v` 清除数据。
 

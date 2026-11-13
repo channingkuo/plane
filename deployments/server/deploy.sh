@@ -7,12 +7,37 @@ cd -- "$(dirname -- "${BASH_SOURCE[0]}")"
 
 fail() { printf '%s\n' "$*" >&2; exit 1; }
 compose() {
-  docker compose --env-file .env --env-file images.env \
-    -f docker-compose.yml -f compose.server.yml "$@"
+  if docker compose version >/dev/null 2>&1; then
+    docker compose --env-file .env --env-file images.env \
+      -f docker-compose.yml -f compose.server.yml "$@"
+  elif command -v docker-compose >/dev/null 2>&1; then
+    docker-compose --env-file .env --env-file images.env \
+      -f docker-compose.yml -f compose.server.yml "$@"
+  else
+    fail "Docker Compose is not installed."
+  fi
+}
+
+# Create the bind-mount directories configured by PLANE_DATA_DIR.
+# Read .env as data; do not source it as shell code.
+create_data_directories() {
+  local data_dir
+  data_dir="$(sed -n 's/^PLANE_DATA_DIR=//p' .env)"
+  [[ -n $data_dir ]] || fail 'PLANE_DATA_DIR is missing from .env (example: PLANE_DATA_DIR=../plane-data).'
+  case "$data_dir" in
+    /*|./*|../*) ;;
+    *) fail 'PLANE_DATA_DIR must be absolute or begin with ./ or ../.' ;;
+  esac
+
+  mkdir -p -- \
+    "$data_dir"/{postgres,redis,rabbitmq,minio} \
+    "$data_dir"/logs/{api,worker,beat-worker,migrator} \
+    "$data_dir"/proxy/{config,data}
+  printf 'Prepared Plane bind-mount directories under: %s\n' "$data_dir"
 }
 
 init() {
-  [[ ! -e .env ]] || { echo '.env already exists; preserved existing configuration and secrets.'; return; }
+  [[ ! -e .env ]] || { echo '.env already exists; preserved existing configuration and secrets.'; create_data_directories; return; }
   local url="${1:-}" scheme authority host port http_port=80 https_port=443 site_address
   [[ $url =~ ^(https?)://([[:alnum:]][[:alnum:].-]*)(:([0-9]+))?/?$ ]] || fail 'Usage: ./deploy.sh init https://plane.example.com (or http://SERVER_IP:8080)'
   scheme="${BASH_REMATCH[1]}" host="${BASH_REMATCH[2]}" port="${BASH_REMATCH[4]:-}"
@@ -50,7 +75,8 @@ init() {
       -e "s|^AWS_SECRET_ACCESS_KEY=.*|AWS_SECRET_ACCESS_KEY=$storage_secret|" \
       .env.example > .env
   )
-  echo 'Created .env with random secrets. Keep this file and Docker data volumes between upgrades.'
+  create_data_directories
+  echo 'Created .env with random secrets. Keep this file and the Plane data directory between upgrades.'
 }
 
 require_configuration() {
