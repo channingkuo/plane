@@ -59,6 +59,8 @@ plane-data/
 
 部署完成后打开配置的 `WEB_URL`，首次实例设置入口是 `/god-mode/`。项目工作流默认关闭，在项目设置中配置并启用；本包的 API 已包含 `0126_project_workflows` 迁移。
 
+Web 和 Admin 镜像已内置取消静态资源 IP 限流的 Caddy 配置，避免页面集中加载 JavaScript 时触发每分钟 300 次请求上限并返回 429。使用本次修复后构建的新包执行 `./deploy.sh up` 即可生效，无需导出或挂载 Caddyfile；若之前手动添加过 Web/Admin 的 `/etc/caddy/Caddyfile` 挂载，请移除这些挂载以使用镜像内的新配置。安全响应头、SPA 路由回退和访问日志仍然保留，API 限流配置不受影响。
+
 ## 日常操作
 
 ```bash
